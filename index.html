@@ -795,7 +795,9 @@
           if (gameState && room.timerRunning !== undefined) {
             if (room.timerRunning && !timerInterval) {
               // Timer should be running but isn't
-              const elapsed = Math.floor((Date.now() - room.timerStartTime) / 1000);
+              const elapsed = Math.floor(
+                (Date.now() - room.timerStartTime) / 1000,
+              );
               const remainingSeconds = Math.max(0, room.timerSeconds - elapsed);
               startTimerSync(remainingSeconds);
             } else if (!room.timerRunning && timerInterval) {
@@ -960,7 +962,7 @@
           roomsRef.child(currentRoomId).update({
             timerRunning: true,
             timerSeconds: timerSeconds,
-            timerStartTime: Date.now()
+            timerStartTime: Date.now(),
           });
 
           // Broadcast to peers (backup)
@@ -977,7 +979,7 @@
         // Update Firebase
         roomsRef.child(currentRoomId).update({
           timerRunning: false,
-          timerSeconds: timerSeconds
+          timerSeconds: timerSeconds,
         });
 
         // Broadcast to peers (backup)
