@@ -291,6 +291,88 @@
         background: #fcf3cf;
         color: #7d6608;
       }
+
+      /* Chat */
+      .chat-container {
+        background: #ecf0f1;
+        border-radius: 12px;
+        padding: 15px;
+        margin-bottom: 20px;
+      }
+
+      .chat-messages {
+        max-height: 300px;
+        overflow-y: auto;
+        margin-bottom: 15px;
+        padding: 10px;
+        background: white;
+        border-radius: 8px;
+      }
+
+      .chat-message {
+        margin-bottom: 12px;
+        padding: 10px;
+        border-radius: 8px;
+        background: #f8f9fa;
+      }
+
+      .chat-message.question {
+        background: #d6eaf8;
+        border-left: 4px solid #3498db;
+      }
+
+      .chat-message.answer {
+        background: #d5f4e6;
+        border-left: 4px solid #27ae60;
+      }
+
+      .chat-message .sender {
+        font-weight: 600;
+        color: #2c3e50;
+        margin-bottom: 4px;
+      }
+
+      .chat-message .target {
+        color: #e74c3c;
+        font-weight: 600;
+      }
+
+      .chat-message .text {
+        color: #34495e;
+      }
+
+      .chat-message.waiting {
+        background: #fcf3cf;
+        border-left: 4px solid #f39c12;
+        font-style: italic;
+        text-align: center;
+      }
+
+      .chat-input-group {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .chat-input-row {
+        display: flex;
+        gap: 10px;
+      }
+
+      .chat-input-group select,
+      .chat-input-group input {
+        margin-bottom: 0;
+      }
+
+      .chat-input-group select {
+        flex: 1;
+      }
+
+      .chat-input-row button {
+        width: auto;
+        padding: 14px 20px;
+        margin: 0;
+      }
     </style>
   </head>
   <body>
@@ -323,13 +405,11 @@
         <h2>Players in Lobby</h2>
         <div id="playerList" class="player-list"></div>
 
-        <div id="hostControls" class="hidden">
-          <div class="settings-group">
-            <label for="gameDuration">Game Duration (minutes)</label>
-            <input type="number" id="gameDuration" value="8" min="1" max="30" />
-          </div>
-          <button id="startGameBtn" class="success">Start Game</button>
+        <div class="settings-group">
+          <label for="gameDuration">Game Duration (minutes)</label>
+          <input type="number" id="gameDuration" value="8" min="1" max="30" />
         </div>
+        <button id="startGameBtn" class="success">Start Game</button>
 
         <button id="leaveLobbyBtn" class="danger">Leave Room</button>
       </div>
@@ -344,6 +424,21 @@
         <!-- Players -->
         <h2>Players</h2>
         <div id="gamePlayers" class="player-list"></div>
+
+        <!-- Chat -->
+        <div class="chat-container">
+          <h2>Chat & Questions</h2>
+          <div id="chatMessages" class="chat-messages"></div>
+          <div class="chat-input-group">
+            <select id="targetPlayer">
+              <option value="">Select player to ask...</option>
+            </select>
+            <div class="chat-input-row">
+              <input type="text" id="chatInput" placeholder="Type your question..." />
+              <button id="sendQuestionBtn" class="success">Ask</button>
+            </div>
+          </div>
+        </div>
 
         <!-- Timer -->
         <div class="timer-section">
@@ -398,6 +493,8 @@
       let timerInterval = null;
       let timerSeconds = 0;
       let gameState = null;
+      let currentTurn = null;
+      let allPlayers = {};
 
       // DOM elements
       const homeScreen = document.getElementById("homeScreen");
@@ -408,7 +505,6 @@
       const roomList = document.getElementById("roomList");
       const playerList = document.getElementById("playerList");
       const gamePlayers = document.getElementById("gamePlayers");
-      const hostControls = document.getElementById("hostControls");
       const startGameBtn = document.getElementById("startGameBtn");
       const leaveLobbyBtn = document.getElementById("leaveLobbyBtn");
       const gameDuration = document.getElementById("gameDuration");
@@ -420,6 +516,10 @@
       const stopTimerBtn = document.getElementById("stopTimerBtn");
       const endGameBtn = document.getElementById("endGameBtn");
       const roomName = document.getElementById("roomName");
+      const chatMessages = document.getElementById("chatMessages");
+      const chatInput = document.getElementById("chatInput");
+      const targetPlayer = document.getElementById("targetPlayer");
+      const sendQuestionBtn = document.getElementById("sendQuestionBtn");
 
       // Initialize PeerJS
       function initPeer() {
@@ -469,6 +569,12 @@
           startGame();
         } else if (data.type === "gameEnd") {
           endGame();
+        } else if (data.type === "timerStart") {
+          startTimerSync(data.seconds);
+        } else if (data.type === "timerStop") {
+          stopTimer();
+        } else if (data.type === "chat") {
+          addChatMessage(data.message);
         }
       }
 
@@ -520,7 +626,15 @@
           .child(roomId)
           .set(roomData)
           .then(() => {
-            roomsRef.child(roomId).onDisconnect().remove();
+            // Set presence tracking
+            const playerPresenceRef = roomsRef
+              .child(roomId)
+              .child("players")
+              .child(myPeerId)
+              .child("connected");
+            playerPresenceRef.set(true);
+            playerPresenceRef.onDisconnect().set(false);
+
             showLobby();
             watchRoom();
           })
@@ -596,11 +710,24 @@
                 name: username,
                 peerId: myPeerId,
                 isHost: false,
+                connected: true,
               })
               .then(() => {
-                // Connect to host
-                const conn = peer.connect(room.hostPeerId);
-                setupConnection(conn);
+                // Set presence tracking
+                const playerPresenceRef = roomsRef
+                  .child(roomId)
+                  .child("players")
+                  .child(myPeerId)
+                  .child("connected");
+                playerPresenceRef.onDisconnect().set(false);
+
+                // Connect to all players in room
+                Object.entries(room.players).forEach(([peerId, player]) => {
+                  if (peerId !== myPeerId && !connections[peerId]) {
+                    const conn = peer.connect(peerId);
+                    setupConnection(conn);
+                  }
+                });
 
                 showLobby();
                 watchRoom();
@@ -618,13 +745,38 @@
             return;
           }
 
+          // Check if all players disconnected
+          if (room.players) {
+            const connectedPlayers = Object.values(room.players).filter(
+              (p) => p.connected
+            );
+            if (connectedPlayers.length === 0) {
+              // Clean up empty room
+              roomsRef.child(currentRoomId).remove();
+              return;
+            }
+          }
+
+          allPlayers = room.players || {};
           updatePlayerList(room.players);
           roomName.textContent = room.name;
 
           if (room.gameStarted && !gameState) {
             // Game started, load state
             gameState = room.gameState;
+            currentTurn = room.currentTurn || null;
             startGame();
+          }
+
+          // Update chat if game is running
+          if (gameState && room.chat) {
+            displayChat(room.chat);
+          }
+
+          // Update current turn
+          if (room.currentTurn) {
+            currentTurn = room.currentTurn;
+            updateChatUI();
           }
         });
       }
@@ -647,10 +799,6 @@
         homeScreen.classList.add("hidden");
         lobbyScreen.classList.remove("hidden");
         gameScreen.classList.add("hidden");
-
-        if (isHost) {
-          hostControls.classList.remove("hidden");
-        }
       }
 
       // Leave room
@@ -660,15 +808,14 @@
 
       function leaveRoom() {
         if (currentRoomId) {
-          if (isHost) {
-            roomsRef.child(currentRoomId).remove();
-          } else {
-            roomsRef
-              .child(currentRoomId)
-              .child("players")
-              .child(myPeerId)
-              .remove();
-          }
+          // Mark player as disconnected
+          roomsRef
+            .child(currentRoomId)
+            .child("players")
+            .child(myPeerId)
+            .child("connected")
+            .set(false);
+          
           roomsRef.child(currentRoomId).off();
         }
 
@@ -678,6 +825,7 @@
         currentRoomId = null;
         isHost = false;
         gameState = null;
+        currentTurn = null;
 
         homeScreen.classList.remove("hidden");
         lobbyScreen.classList.add("hidden");
@@ -768,6 +916,9 @@
         // Setup timer
         timerSeconds = gameState.duration;
         updateTimerDisplay();
+        
+        // Populate player dropdown for chat
+        updateChatUI();
       }
 
       // Toggle location crossed off
@@ -780,20 +931,45 @@
       // Timer functions
       startTimerBtn.addEventListener("click", () => {
         if (!timerInterval) {
-          timerInterval = setInterval(() => {
-            timerSeconds--;
-            updateTimerDisplay();
-            if (timerSeconds <= 0) {
-              stopTimer();
-              alert("Time is up!");
-            }
-          }, 1000);
+          // Update Firebase
+          roomsRef.child(currentRoomId).child("timerRunning").set(true);
+          roomsRef.child(currentRoomId).child("timerSeconds").set(timerSeconds);
+          
+          // Broadcast to peers
+          broadcastToPeers({
+            type: "timerStart",
+            seconds: timerSeconds,
+          });
+          
+          startTimerSync(timerSeconds);
         }
       });
 
       stopTimerBtn.addEventListener("click", () => {
+        // Update Firebase
+        roomsRef.child(currentRoomId).child("timerRunning").set(false);
+        
+        // Broadcast to peers
+        broadcastToPeers({ type: "timerStop" });
+        
         stopTimer();
       });
+
+      function startTimerSync(seconds) {
+        if (timerInterval) return;
+        
+        timerSeconds = seconds;
+        updateTimerDisplay();
+        
+        timerInterval = setInterval(() => {
+          timerSeconds--;
+          updateTimerDisplay();
+          if (timerSeconds <= 0) {
+            stopTimer();
+            alert("Time is up!");
+          }
+        }, 1000);
+      }
 
       function stopTimer() {
         if (timerInterval) {
@@ -808,16 +984,188 @@
         timerDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, "0")}`;
       }
 
+      // Chat functions
+      sendQuestionBtn.addEventListener("click", () => {
+        const target = targetPlayer.value;
+        const question = chatInput.value.trim();
+        
+        if (!target) {
+          alert("Please select a player to ask");
+          return;
+        }
+        
+        if (!question) {
+          alert("Please type a question");
+          return;
+        }
+
+        if (currentTurn && currentTurn.waitingFor && currentTurn.waitingFor !== myPeerId) {
+          alert("Wait for " + allPlayers[currentTurn.waitingFor].name + " to answer first!");
+          return;
+        }
+        
+        const message = {
+          id: Date.now(),
+          type: "question",
+          from: myPeerId,
+          fromName: myUsername,
+          to: target,
+          toName: allPlayers[target].name,
+          text: question,
+          timestamp: Date.now(),
+        };
+        
+        // Add to Firebase
+        roomsRef.child(currentRoomId).child("chat").push(message);
+        
+        // Set turn to wait for answer
+        roomsRef.child(currentRoomId).child("currentTurn").set({
+          asker: myPeerId,
+          waitingFor: target,
+          questionId: message.id,
+        });
+        
+        // Broadcast to peers
+        broadcastToPeers({
+          type: "chat",
+          message: message,
+        });
+        
+        chatInput.value = "";
+      });
+
+      chatInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+          sendQuestionBtn.click();
+        }
+      });
+
+      function displayChat(chat) {
+        if (!chat) return;
+        
+        const messages = Object.values(chat).sort((a, b) => a.timestamp - b.timestamp);
+        chatMessages.innerHTML = "";
+        
+        messages.forEach((msg) => {
+          addChatMessage(msg, false);
+        });
+        
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+
+      function addChatMessage(msg, scrollToBottom = true) {
+        const div = document.createElement("div");
+        div.className = `chat-message ${msg.type}`;
+        
+        if (msg.type === "question") {
+          div.innerHTML = `
+            <div class="sender">${msg.fromName}</div>
+            <div class="text">asks <span class="target">${msg.toName}</span>: ${msg.text}</div>
+          `;
+        } else if (msg.type === "answer") {
+          div.innerHTML = `
+            <div class="sender">${msg.fromName}</div>
+            <div class="text">answers: ${msg.text}</div>
+          `;
+        }
+        
+        chatMessages.appendChild(div);
+        
+        if (scrollToBottom) {
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+      }
+
+      function updateChatUI() {
+        // Update player dropdown
+        targetPlayer.innerHTML = '<option value="">Select player to ask...</option>';
+        Object.entries(allPlayers).forEach(([peerId, player]) => {
+          if (peerId !== myPeerId && player.connected) {
+            targetPlayer.innerHTML += `<option value="${peerId}">${player.name}</option>`;
+          }
+        });
+        
+        // Show waiting message if needed
+        if (currentTurn && currentTurn.waitingFor) {
+          if (currentTurn.waitingFor === myPeerId) {
+            // It's my turn to answer
+            const waitingDiv = document.createElement("div");
+            waitingDiv.className = "chat-message waiting";
+            waitingDiv.innerHTML = `
+              <div>It's your turn to answer!</div>
+              <input type="text" id="answerInput" placeholder="Type your answer..." style="margin: 10px 0;" />
+              <button onclick="sendAnswer()" class="success" style="width: 100%;">Send Answer</button>
+            `;
+            
+            // Check if waiting message already exists
+            const existingWaiting = chatMessages.querySelector(".waiting");
+            if (existingWaiting) {
+              existingWaiting.remove();
+            }
+            
+            chatMessages.appendChild(waitingDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+          }
+        }
+        
+        // Disable/enable asking based on turn
+        if (currentTurn && currentTurn.waitingFor && currentTurn.waitingFor !== myPeerId) {
+          sendQuestionBtn.disabled = true;
+          chatInput.disabled = true;
+          targetPlayer.disabled = true;
+        } else {
+          sendQuestionBtn.disabled = false;
+          chatInput.disabled = false;
+          targetPlayer.disabled = false;
+        }
+      }
+
+      window.sendAnswer = function() {
+        const answerInput = document.getElementById("answerInput");
+        const answer = answerInput.value.trim();
+        
+        if (!answer) {
+          alert("Please type an answer");
+          return;
+        }
+        
+        const message = {
+          id: Date.now(),
+          type: "answer",
+          from: myPeerId,
+          fromName: myUsername,
+          text: answer,
+          timestamp: Date.now(),
+        };
+        
+        // Add to Firebase
+        roomsRef.child(currentRoomId).child("chat").push(message);
+        
+        // Clear turn - now answerer can ask
+        roomsRef.child(currentRoomId).child("currentTurn").set({
+          asker: myPeerId,
+          waitingFor: null,
+          questionId: null,
+        });
+        
+        // Broadcast to peers
+        broadcastToPeers({
+          type: "chat",
+          message: message,
+        });
+      };
+
       // End game
       endGameBtn.addEventListener("click", () => {
         if (confirm("Are you sure you want to end the game?")) {
-          if (isHost) {
-            roomsRef.child(currentRoomId).update({
-              gameStarted: false,
-              gameState: null,
-            });
-            broadcastToPeers({ type: "gameEnd" });
-          }
+          roomsRef.child(currentRoomId).update({
+            gameStarted: false,
+            gameState: null,
+            currentTurn: null,
+            chat: null,
+            timerRunning: false,
+          });
+          broadcastToPeers({ type: "gameEnd" });
           endGame();
         }
       });
@@ -825,6 +1173,8 @@
       function endGame() {
         stopTimer();
         gameState = null;
+        currentTurn = null;
+        chatMessages.innerHTML = "";
         showLobby();
       }
 
