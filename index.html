@@ -12,7 +12,9 @@
       }
 
       body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+          sans-serif;
         background: #2c3e50;
         min-height: 100vh;
         padding: 20px;
@@ -242,7 +244,7 @@
         font-size: 48px;
         font-weight: bold;
         margin-bottom: 15px;
-        font-family: 'Courier New', monospace;
+        font-family: "Courier New", monospace;
       }
 
       .timer-controls {
@@ -305,7 +307,7 @@
 
         <button id="createRoomBtn" disabled>Create New Room</button>
 
-        <div style="text-align: center; margin: 20px 0; color: #7f8c8d;">OR</div>
+        <div style="text-align: center; margin: 20px 0; color: #7f8c8d">OR</div>
 
         <h2>Join Existing Room</h2>
         <div id="roomList" class="room-list">
@@ -363,13 +365,13 @@
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
-    
+
     <!-- PeerJS -->
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-    
+
     <!-- Game Data -->
     <script src="game-data.js"></script>
-    
+
     <script>
       // Firebase Configuration
       const firebaseConfig = {
@@ -379,12 +381,12 @@
         projectId: "spygame-fa5d0",
         storageBucket: "spygame-fa5d0.firebasestorage.app",
         messagingSenderId: "1031471679689",
-        appId: "1:1031471679689:web:e61361fe2f2a2079efa518"
+        appId: "1:1031471679689:web:e61361fe2f2a2079efa518",
       };
 
       firebase.initializeApp(firebaseConfig);
       const database = firebase.database();
-      const roomsRef = database.ref('rooms');
+      const roomsRef = database.ref("rooms");
 
       // Global state
       let peer = null;
@@ -398,46 +400,46 @@
       let gameState = null;
 
       // DOM elements
-      const homeScreen = document.getElementById('homeScreen');
-      const lobbyScreen = document.getElementById('lobbyScreen');
-      const gameScreen = document.getElementById('gameScreen');
-      const usernameInput = document.getElementById('usernameInput');
-      const createRoomBtn = document.getElementById('createRoomBtn');
-      const roomList = document.getElementById('roomList');
-      const playerList = document.getElementById('playerList');
-      const gamePlayers = document.getElementById('gamePlayers');
-      const hostControls = document.getElementById('hostControls');
-      const startGameBtn = document.getElementById('startGameBtn');
-      const leaveLobbyBtn = document.getElementById('leaveLobbyBtn');
-      const gameDuration = document.getElementById('gameDuration');
-      const roleCard = document.getElementById('roleCard');
-      const locationsGrid = document.getElementById('locationsGrid');
-      const locationCount = document.getElementById('locationCount');
-      const timerDisplay = document.getElementById('timerDisplay');
-      const startTimerBtn = document.getElementById('startTimerBtn');
-      const stopTimerBtn = document.getElementById('stopTimerBtn');
-      const endGameBtn = document.getElementById('endGameBtn');
-      const roomName = document.getElementById('roomName');
+      const homeScreen = document.getElementById("homeScreen");
+      const lobbyScreen = document.getElementById("lobbyScreen");
+      const gameScreen = document.getElementById("gameScreen");
+      const usernameInput = document.getElementById("usernameInput");
+      const createRoomBtn = document.getElementById("createRoomBtn");
+      const roomList = document.getElementById("roomList");
+      const playerList = document.getElementById("playerList");
+      const gamePlayers = document.getElementById("gamePlayers");
+      const hostControls = document.getElementById("hostControls");
+      const startGameBtn = document.getElementById("startGameBtn");
+      const leaveLobbyBtn = document.getElementById("leaveLobbyBtn");
+      const gameDuration = document.getElementById("gameDuration");
+      const roleCard = document.getElementById("roleCard");
+      const locationsGrid = document.getElementById("locationsGrid");
+      const locationCount = document.getElementById("locationCount");
+      const timerDisplay = document.getElementById("timerDisplay");
+      const startTimerBtn = document.getElementById("startTimerBtn");
+      const stopTimerBtn = document.getElementById("stopTimerBtn");
+      const endGameBtn = document.getElementById("endGameBtn");
+      const roomName = document.getElementById("roomName");
 
       // Initialize PeerJS
       function initPeer() {
         peer = new Peer();
-        
-        peer.on('open', (id) => {
-          console.log('My peer ID:', id);
+
+        peer.on("open", (id) => {
+          console.log("My peer ID:", id);
           myPeerId = id;
           createRoomBtn.disabled = false;
           loadRooms();
         });
 
-        peer.on('connection', (conn) => {
-          console.log('Incoming connection from:', conn.peer);
+        peer.on("connection", (conn) => {
+          console.log("Incoming connection from:", conn.peer);
           setupConnection(conn);
         });
 
-        peer.on('error', (err) => {
-          console.error('Peer error:', err);
-          alert('Connection error: ' + err.message);
+        peer.on("error", (err) => {
+          console.error("Peer error:", err);
+          alert("Connection error: " + err.message);
         });
       }
 
@@ -445,40 +447,40 @@
       function setupConnection(conn) {
         connections[conn.peer] = conn;
 
-        conn.on('open', () => {
-          console.log('Connection established with:', conn.peer);
+        conn.on("open", () => {
+          console.log("Connection established with:", conn.peer);
         });
 
-        conn.on('data', (data) => {
-          console.log('Received data:', data);
+        conn.on("data", (data) => {
+          console.log("Received data:", data);
           handlePeerMessage(data);
         });
 
-        conn.on('close', () => {
-          console.log('Connection closed with:', conn.peer);
+        conn.on("close", () => {
+          console.log("Connection closed with:", conn.peer);
           delete connections[conn.peer];
         });
       }
 
       // Handle messages from peers
       function handlePeerMessage(data) {
-        if (data.type === 'gameStart') {
+        if (data.type === "gameStart") {
           gameState = data.gameState;
           startGame();
-        } else if (data.type === 'gameEnd') {
+        } else if (data.type === "gameEnd") {
           endGame();
         }
       }
 
       // Send message to all peers
       function broadcastToPeers(data) {
-        Object.values(connections).forEach(conn => {
+        Object.values(connections).forEach((conn) => {
           conn.send(data);
         });
       }
 
       // Enable create button when username is entered
-      usernameInput.addEventListener('input', () => {
+      usernameInput.addEventListener("input", () => {
         if (usernameInput.value.trim() && myPeerId) {
           createRoomBtn.disabled = false;
         } else {
@@ -487,15 +489,15 @@
       });
 
       // Create room
-      createRoomBtn.addEventListener('click', () => {
+      createRoomBtn.addEventListener("click", () => {
         const username = usernameInput.value.trim();
         if (!username) {
-          alert('Please enter your name');
+          alert("Please enter your name");
           return;
         }
 
         myUsername = username;
-        const roomId = 'room_' + Date.now();
+        const roomId = "room_" + Date.now();
         currentRoomId = roomId;
         isHost = true;
 
@@ -508,36 +510,43 @@
             [myPeerId]: {
               name: username,
               peerId: myPeerId,
-              isHost: true
-            }
+              isHost: true,
+            },
           },
-          gameStarted: false
+          gameStarted: false,
         };
 
-        roomsRef.child(roomId).set(roomData).then(() => {
-          roomsRef.child(roomId).onDisconnect().remove();
-          showLobby();
-          watchRoom();
-        }).catch((error) => {
-          console.error('Error creating room:', error);
-          alert('Failed to create room');
-        });
+        roomsRef
+          .child(roomId)
+          .set(roomData)
+          .then(() => {
+            roomsRef.child(roomId).onDisconnect().remove();
+            showLobby();
+            watchRoom();
+          })
+          .catch((error) => {
+            console.error("Error creating room:", error);
+            alert("Failed to create room");
+          });
       });
 
       // Load rooms
       function loadRooms() {
-        roomsRef.on('value', (snapshot) => {
+        roomsRef.on("value", (snapshot) => {
           const rooms = snapshot.val();
-          
+
           if (!rooms || Object.keys(rooms).length === 0) {
-            roomList.innerHTML = '<div class="status-message info">No rooms available. Create one!</div>';
+            roomList.innerHTML =
+              '<div class="status-message info">No rooms available. Create one!</div>';
             return;
           }
 
-          let roomsHtml = '';
+          let roomsHtml = "";
           Object.entries(rooms).forEach(([roomId, room]) => {
             if (!room.gameStarted) {
-              const playerCount = room.players ? Object.keys(room.players).length : 0;
+              const playerCount = room.players
+                ? Object.keys(room.players).length
+                : 0;
               roomsHtml += `
                 <div class="room-item">
                   <div class="room-info">
@@ -550,15 +559,17 @@
             }
           });
 
-          roomList.innerHTML = roomsHtml || '<div class="status-message info">No rooms available. Create one!</div>';
+          roomList.innerHTML =
+            roomsHtml ||
+            '<div class="status-message info">No rooms available. Create one!</div>';
         });
       }
 
       // Join room
-      window.joinRoom = function(roomId) {
+      window.joinRoom = function (roomId) {
         const username = usernameInput.value.trim();
         if (!username) {
-          alert('Please enter your name');
+          alert("Please enter your name");
           return;
         }
 
@@ -566,42 +577,50 @@
         currentRoomId = roomId;
         isHost = false;
 
-        roomsRef.child(roomId).once('value').then((snapshot) => {
-          const room = snapshot.val();
-          if (!room) {
-            alert('Room no longer exists');
-            return;
-          }
+        roomsRef
+          .child(roomId)
+          .once("value")
+          .then((snapshot) => {
+            const room = snapshot.val();
+            if (!room) {
+              alert("Room no longer exists");
+              return;
+            }
 
-          // Add player to room
-          roomsRef.child(roomId).child('players').child(myPeerId).set({
-            name: username,
-            peerId: myPeerId,
-            isHost: false
-          }).then(() => {
-            // Connect to host
-            const conn = peer.connect(room.hostPeerId);
-            setupConnection(conn);
+            // Add player to room
+            roomsRef
+              .child(roomId)
+              .child("players")
+              .child(myPeerId)
+              .set({
+                name: username,
+                peerId: myPeerId,
+                isHost: false,
+              })
+              .then(() => {
+                // Connect to host
+                const conn = peer.connect(room.hostPeerId);
+                setupConnection(conn);
 
-            showLobby();
-            watchRoom();
+                showLobby();
+                watchRoom();
+              });
           });
-        });
       };
 
       // Watch room for updates
       function watchRoom() {
-        roomsRef.child(currentRoomId).on('value', (snapshot) => {
+        roomsRef.child(currentRoomId).on("value", (snapshot) => {
           const room = snapshot.val();
           if (!room) {
-            alert('Room was closed');
+            alert("Room was closed");
             leaveRoom();
             return;
           }
 
           updatePlayerList(room.players);
           roomName.textContent = room.name;
-          
+
           if (room.gameStarted && !gameState) {
             // Game started, load state
             gameState = room.gameState;
@@ -614,28 +633,28 @@
       function updatePlayerList(players) {
         if (!players) return;
 
-        let html = '';
-        Object.values(players).forEach(player => {
-          html += `<div class="player${player.isHost ? ' host' : ''}">${player.name}</div>`;
+        let html = "";
+        Object.values(players).forEach((player) => {
+          html += `<div class="player${player.isHost ? " host" : ""}">${player.name}</div>`;
         });
-        
+
         playerList.innerHTML = html;
         gamePlayers.innerHTML = html;
       }
 
       // Show lobby
       function showLobby() {
-        homeScreen.classList.add('hidden');
-        lobbyScreen.classList.remove('hidden');
-        gameScreen.classList.add('hidden');
+        homeScreen.classList.add("hidden");
+        lobbyScreen.classList.remove("hidden");
+        gameScreen.classList.add("hidden");
 
         if (isHost) {
-          hostControls.classList.remove('hidden');
+          hostControls.classList.remove("hidden");
         }
       }
 
       // Leave room
-      leaveLobbyBtn.addEventListener('click', () => {
+      leaveLobbyBtn.addEventListener("click", () => {
         leaveRoom();
       });
 
@@ -644,91 +663,103 @@
           if (isHost) {
             roomsRef.child(currentRoomId).remove();
           } else {
-            roomsRef.child(currentRoomId).child('players').child(myPeerId).remove();
+            roomsRef
+              .child(currentRoomId)
+              .child("players")
+              .child(myPeerId)
+              .remove();
           }
           roomsRef.child(currentRoomId).off();
         }
 
-        Object.values(connections).forEach(conn => conn.close());
+        Object.values(connections).forEach((conn) => conn.close());
         connections = {};
-        
+
         currentRoomId = null;
         isHost = false;
         gameState = null;
 
-        homeScreen.classList.remove('hidden');
-        lobbyScreen.classList.add('hidden');
-        gameScreen.classList.add('hidden');
+        homeScreen.classList.remove("hidden");
+        lobbyScreen.classList.add("hidden");
+        gameScreen.classList.add("hidden");
       }
 
       // Start game
-      startGameBtn.addEventListener('click', () => {
-        roomsRef.child(currentRoomId).once('value').then((snapshot) => {
-          const room = snapshot.val();
-          const players = Object.values(room.players);
-          
-          if (players.length < 3) {
-            alert('Need at least 3 players to start!');
-            return;
-          }
+      startGameBtn.addEventListener("click", () => {
+        roomsRef
+          .child(currentRoomId)
+          .once("value")
+          .then((snapshot) => {
+            const room = snapshot.val();
+            const players = Object.values(room.players);
 
-          // Assign roles
-          const location = GAME_LOCATIONS[Math.floor(Math.random() * GAME_LOCATIONS.length)];
-          const spyIndex = Math.floor(Math.random() * players.length);
-          
-          const assignments = {};
-          players.forEach((player, index) => {
-            assignments[player.peerId] = {
-              isSpy: index === spyIndex,
-              location: index === spyIndex ? null : location.name,
-              role: index === spyIndex ? null : location.roles[index % location.roles.length]
+            if (players.length < 3) {
+              alert("Need at least 3 players to start!");
+              return;
+            }
+
+            // Assign roles
+            const location =
+              GAME_LOCATIONS[Math.floor(Math.random() * GAME_LOCATIONS.length)];
+            const spyIndex = Math.floor(Math.random() * players.length);
+
+            const assignments = {};
+            players.forEach((player, index) => {
+              assignments[player.peerId] = {
+                isSpy: index === spyIndex,
+                location: index === spyIndex ? null : location.name,
+                role:
+                  index === spyIndex
+                    ? null
+                    : location.roles[index % location.roles.length],
+              };
+            });
+
+            gameState = {
+              location: location.name,
+              assignments: assignments,
+              duration: parseInt(gameDuration.value) * 60,
+              startTime: Date.now(),
             };
+
+            // Update Firebase
+            roomsRef.child(currentRoomId).update({
+              gameStarted: true,
+              gameState: gameState,
+            });
+
+            // Broadcast to peers
+            broadcastToPeers({
+              type: "gameStart",
+              gameState: gameState,
+            });
+
+            startGame();
           });
-
-          gameState = {
-            location: location.name,
-            assignments: assignments,
-            duration: parseInt(gameDuration.value) * 60,
-            startTime: Date.now()
-          };
-
-          // Update Firebase
-          roomsRef.child(currentRoomId).update({
-            gameStarted: true,
-            gameState: gameState
-          });
-
-          // Broadcast to peers
-          broadcastToPeers({
-            type: 'gameStart',
-            gameState: gameState
-          });
-
-          startGame();
-        });
       });
 
       // Start game screen
       function startGame() {
-        homeScreen.classList.add('hidden');
-        lobbyScreen.classList.add('hidden');
-        gameScreen.classList.remove('hidden');
+        homeScreen.classList.add("hidden");
+        lobbyScreen.classList.add("hidden");
+        gameScreen.classList.remove("hidden");
 
         // Show role
         const assignment = gameState.assignments[myPeerId];
         if (assignment.isSpy) {
-          roleCard.className = 'role-card spy';
-          roleCard.innerHTML = '<h2>🕵️ You are the SPY!</h2><p>Find out the location without revealing yourself!</p>';
+          roleCard.className = "role-card spy";
+          roleCard.innerHTML =
+            "<h2>🕵️ You are the SPY!</h2><p>Find out the location without revealing yourself!</p>";
         } else {
-          roleCard.className = 'role-card';
+          roleCard.className = "role-card";
           roleCard.innerHTML = `<h2>📍 Location: ${assignment.location}</h2><p>Role: ${assignment.role}</p>`;
         }
 
         // Show all locations
-        locationsGrid.innerHTML = '';
-        GAME_LOCATIONS.forEach(loc => {
-          const div = document.createElement('div');
-          div.className = 'location';
+        locationsGrid.innerHTML = "";
+        GAME_LOCATIONS.forEach((loc) => {
+          const div = document.createElement("div");
+          div.className = "location";
           div.textContent = loc.name;
           div.onclick = () => toggleLocation(div);
           locationsGrid.appendChild(div);
@@ -741,26 +772,26 @@
 
       // Toggle location crossed off
       function toggleLocation(element) {
-        element.classList.toggle('crossed');
-        const crossed = document.querySelectorAll('.location.crossed').length;
+        element.classList.toggle("crossed");
+        const crossed = document.querySelectorAll(".location.crossed").length;
         locationCount.textContent = GAME_LOCATIONS.length - crossed;
       }
 
       // Timer functions
-      startTimerBtn.addEventListener('click', () => {
+      startTimerBtn.addEventListener("click", () => {
         if (!timerInterval) {
           timerInterval = setInterval(() => {
             timerSeconds--;
             updateTimerDisplay();
             if (timerSeconds <= 0) {
               stopTimer();
-              alert('Time is up!');
+              alert("Time is up!");
             }
           }, 1000);
         }
       });
 
-      stopTimerBtn.addEventListener('click', () => {
+      stopTimerBtn.addEventListener("click", () => {
         stopTimer();
       });
 
@@ -774,18 +805,18 @@
       function updateTimerDisplay() {
         const minutes = Math.floor(timerSeconds / 60);
         const seconds = timerSeconds % 60;
-        timerDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        timerDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, "0")}`;
       }
 
       // End game
-      endGameBtn.addEventListener('click', () => {
-        if (confirm('Are you sure you want to end the game?')) {
+      endGameBtn.addEventListener("click", () => {
+        if (confirm("Are you sure you want to end the game?")) {
           if (isHost) {
             roomsRef.child(currentRoomId).update({
               gameStarted: false,
-              gameState: null
+              gameState: null,
             });
-            broadcastToPeers({ type: 'gameEnd' });
+            broadcastToPeers({ type: "gameEnd" });
           }
           endGame();
         }
