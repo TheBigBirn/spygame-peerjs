@@ -721,9 +721,10 @@
                   .child("connected");
                 playerPresenceRef.onDisconnect().set(false);
 
-                // Connect to all players in room
-                Object.entries(room.players).forEach(([peerId, player]) => {
-                  if (peerId !== myPeerId && !connections[peerId]) {
+                // Connect to all existing players in room (exclude self)
+                Object.entries(room.players || {}).forEach(([peerId, player]) => {
+                  if (peerId !== myPeerId && player && player.peerId && !connections[peerId]) {
+                    console.log('Connecting to player:', peerId, player.name);
                     const conn = peer.connect(peerId);
                     setupConnection(conn);
                   }
