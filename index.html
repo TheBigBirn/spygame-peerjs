@@ -217,13 +217,21 @@
       </div>
 
       <div class="section">
-        <h2>Connect to Another Device</h2>
-        <input
-          type="text"
-          id="remotePeerId"
-          placeholder="Enter peer ID to connect"
-        />
-        <button id="connectBtn" disabled>Connect</button>
+        <h2>Create or Join a Room</h2>
+        <div style="margin-bottom: 15px;">
+          <input
+            type="text"
+            id="roomName"
+            placeholder="Enter room name"
+          />
+          <button id="createRoomBtn" disabled>Create Room</button>
+        </div>
+        <div>
+          <h3 style="font-size: 16px; color: #667eea; margin-bottom: 10px;">Available Rooms:</h3>
+          <div id="roomList" style="background: #f8f9fa; padding: 10px; border-radius: 8px; min-height: 60px;">
+            <p style="color: #999; text-align: center; padding: 20px 0;">Loading rooms...</p>
+          </div>
+        </div>
       </div>
 
       <div class="connected-peers hidden" id="connectedPeers">
@@ -247,16 +255,40 @@
       </div>
     </div>
 
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    
+    <!-- PeerJS -->
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script>
+      // Firebase Configuration
+      const firebaseConfig = {
+        apiKey: "AIzaSyDBQWubzgtbljvlq_7Nfmturg3_4Nhauh0",
+        authDomain: "spygame-fa5d0.firebaseapp.com",
+        databaseURL: "https://spygame-fa5d0-default-rtdb.firebaseio.com",
+        projectId: "spygame-fa5d0",
+        storageBucket: "spygame-fa5d0.firebasestorage.app",
+        messagingSenderId: "1031471679689",
+        appId: "1:1031471679689:web:e61361fe2f2a2079efa518"
+      };
+
+      // Initialize Firebase
+      firebase.initializeApp(firebaseConfig);
+      const database = firebase.database();
+      const roomsRef = database.ref('rooms');
+
       let peer = null;
       let connections = {};
+      let myRoomId = null;
+      let isHost = false;
 
       const status = document.getElementById("status");
       const myPeerIdDiv = document.getElementById("myPeerId");
       const peerIdDisplay = document.getElementById("peerIdDisplay");
-      const remotePeerIdInput = document.getElementById("remotePeerId");
-      const connectBtn = document.getElementById("connectBtn");
+      const roomNameInput = document.getElementById("roomName");
+      const createRoomBtn = document.getElementById("createRoomBtn");
+      const roomListDiv = document.getElementById("roomList");
       const messagesDiv = document.getElementById("messages");
       const messageInput = document.getElementById("messageInput");
       const sendBtn = document.getElementById("sendBtn");
@@ -272,9 +304,10 @@
           console.log("My peer ID is: " + id);
           peerIdDisplay.textContent = id;
           myPeerIdDiv.style.display = "block";
-          status.textContent = "Ready to connect";
+          status.textContent = "Ready - Create or join a room";
           status.className = "status waiting";
-          connectBtn.disabled = false;
+          createRoomBtn.disabled = false;
+          loadRooms();
         });
 
         peer.on("connection", (conn) => {
@@ -319,24 +352,99 @@
         });
       }
 
-      // Connect to a peer
-      connectBtn.addEventListener("click", () => {
-        const remotePeerId = remotePeerIdInput.value.trim();
-        if (!remotePeerId) {
-          alert("Please enter a peer ID");
+      // Create room
+      createRoomBtn.addEventListener("click", () => {
+        const roomName = roomNameInput.value.trim();
+        if (!roomName) {
+          alert("Please enter a room name");
           return;
         }
 
-        if (connections[remotePeerId]) {
-          alert("Already connected to this peer");
-          return;
-        }
+        const roomId = 'room_' + Date.now();
+        myRoomId = roomId;
+        isHost = true;
 
-        console.log("Connecting to:", remotePeerId);
-        const conn = peer.connect(remotePeerId);
-        setupConnection(conn);
-        remotePeerIdInput.value = "";
+        roomsRef.child(roomId).set({
+          name: roomName,
+          hostPeerId: peer.id,
+          createdAt: Date.now(),
+          players: 1
+        }).then(() => {
+          status.textContent = `Room "${roomName}" created - waiting for players...`;
+          status.className = "status waiting";
+          roomNameInput.value = "";
+          addMessage(`You created room "${roomName}"`, "system");
+          messageArea.classList.remove("hidden");
+          
+          // Remove room when host disconnects
+          roomsRef.child(roomId).onDisconnect().remove();
+        }).catch((error) => {
+          console.error("Error creating room:", error);
+          alert("Failed to create room");
+        });
       });
+
+      // Load and display rooms
+      function loadRooms() {
+        roomsRef.on('value', (snapshot) => {
+          const rooms = snapshot.val();
+          
+          if (!rooms || Object.keys(rooms).length === 0) {
+            roomListDiv.innerHTML = '<p style="color: #999; text-align: center; padding: 20px 0;">No rooms available. Create one!</p>';
+            return;
+          }
+
+          let roomsHtml = '';
+          Object.entries(rooms).forEach(([roomId, room]) => {
+            if (roomId !== myRoomId) {
+              roomsHtml += `
+                <div style="padding: 12px; background: white; border-radius: 6px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <strong>${room.name}</strong>
+                    <div style="font-size: 12px; color: #666;">${room.players} player(s)</div>
+                  </div>
+                  <button onclick="joinRoom('${roomId}', '${room.hostPeerId}', '${room.name}')" style="padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Join</button>
+                </div>
+              `;
+            }
+          });
+
+          if (roomsHtml) {
+            roomListDiv.innerHTML = roomsHtml;
+          } else if (myRoomId) {
+            roomListDiv.innerHTML = '<p style="color: #999; text-align: center; padding: 20px 0;">You\'re in a room!</p>';
+          }
+        });
+      }
+
+      // Join room
+      window.joinRoom = function(roomId, hostPeerId, roomName) {
+        if (myRoomId) {
+          alert("You're already in a room");
+          return;
+        }
+
+        myRoomId = roomId;
+        isHost = false;
+
+        // Connect to host
+        console.log("Connecting to room host:", hostPeerId);
+        const conn = peer.connect(hostPeerId);
+        setupConnection(conn);
+
+        // Update player count
+        roomsRef.child(roomId).transaction((room) => {
+          if (room) {
+            room.players = (room.players || 1) + 1;
+          }
+          return room;
+        });
+
+        status.textContent = `Joined room "${roomName}"`;
+        status.className = "status connected";
+        addMessage(`Joined room "${roomName}"`, "system");
+        messageArea.classList.remove("hidden");
+      };
 
       // Send message
       function sendMessage() {
