@@ -434,7 +434,11 @@
               <option value="">Select player to ask...</option>
             </select>
             <div class="chat-input-row">
-              <input type="text" id="chatInput" placeholder="Type your question..." />
+              <input
+                type="text"
+                id="chatInput"
+                placeholder="Type your question..."
+              />
               <button id="sendQuestionBtn" class="success">Ask</button>
             </div>
           </div>
@@ -722,13 +726,20 @@
                 playerPresenceRef.onDisconnect().set(false);
 
                 // Connect to all existing players in room (exclude self)
-                Object.entries(room.players || {}).forEach(([peerId, player]) => {
-                  if (peerId !== myPeerId && player && player.peerId && !connections[peerId]) {
-                    console.log('Connecting to player:', peerId, player.name);
-                    const conn = peer.connect(peerId);
-                    setupConnection(conn);
-                  }
-                });
+                Object.entries(room.players || {}).forEach(
+                  ([peerId, player]) => {
+                    if (
+                      peerId !== myPeerId &&
+                      player &&
+                      player.peerId &&
+                      !connections[peerId]
+                    ) {
+                      console.log("Connecting to player:", peerId, player.name);
+                      const conn = peer.connect(peerId);
+                      setupConnection(conn);
+                    }
+                  },
+                );
 
                 showLobby();
                 watchRoom();
@@ -749,7 +760,7 @@
           // Check if all players disconnected
           if (room.players) {
             const connectedPlayers = Object.values(room.players).filter(
-              (p) => p.connected
+              (p) => p.connected,
             );
             if (connectedPlayers.length === 0) {
               // Clean up empty room
@@ -778,6 +789,19 @@
           if (room.currentTurn) {
             currentTurn = room.currentTurn;
             updateChatUI();
+          }
+
+          // Sync timer state
+          if (gameState && room.timerRunning !== undefined) {
+            if (room.timerRunning && !timerInterval) {
+              // Timer should be running but isn't
+              const elapsed = Math.floor((Date.now() - room.timerStartTime) / 1000);
+              const remainingSeconds = Math.max(0, room.timerSeconds - elapsed);
+              startTimerSync(remainingSeconds);
+            } else if (!room.timerRunning && timerInterval) {
+              // Timer should be stopped but is running
+              stopTimer();
+            }
           }
         });
       }
@@ -816,7 +840,7 @@
             .child(myPeerId)
             .child("connected")
             .set(false);
-          
+
           roomsRef.child(currentRoomId).off();
         }
 
@@ -917,7 +941,7 @@
         // Setup timer
         timerSeconds = gameState.duration;
         updateTimerDisplay();
-        
+
         // Populate player dropdown for chat
         updateChatUI();
       }
@@ -932,36 +956,42 @@
       // Timer functions
       startTimerBtn.addEventListener("click", () => {
         if (!timerInterval) {
-          // Update Firebase
-          roomsRef.child(currentRoomId).child("timerRunning").set(true);
-          roomsRef.child(currentRoomId).child("timerSeconds").set(timerSeconds);
-          
-          // Broadcast to peers
+          // Update Firebase with timer state
+          roomsRef.child(currentRoomId).update({
+            timerRunning: true,
+            timerSeconds: timerSeconds,
+            timerStartTime: Date.now()
+          });
+
+          // Broadcast to peers (backup)
           broadcastToPeers({
             type: "timerStart",
             seconds: timerSeconds,
           });
-          
+
           startTimerSync(timerSeconds);
         }
       });
 
       stopTimerBtn.addEventListener("click", () => {
         // Update Firebase
-        roomsRef.child(currentRoomId).child("timerRunning").set(false);
-        
-        // Broadcast to peers
+        roomsRef.child(currentRoomId).update({
+          timerRunning: false,
+          timerSeconds: timerSeconds
+        });
+
+        // Broadcast to peers (backup)
         broadcastToPeers({ type: "timerStop" });
-        
+
         stopTimer();
       });
 
       function startTimerSync(seconds) {
         if (timerInterval) return;
-        
+
         timerSeconds = seconds;
         updateTimerDisplay();
-        
+
         timerInterval = setInterval(() => {
           timerSeconds--;
           updateTimerDisplay();
@@ -989,22 +1019,30 @@
       sendQuestionBtn.addEventListener("click", () => {
         const target = targetPlayer.value;
         const question = chatInput.value.trim();
-        
+
         if (!target) {
           alert("Please select a player to ask");
           return;
         }
-        
+
         if (!question) {
           alert("Please type a question");
           return;
         }
 
-        if (currentTurn && currentTurn.waitingFor && currentTurn.waitingFor !== myPeerId) {
-          alert("Wait for " + allPlayers[currentTurn.waitingFor].name + " to answer first!");
+        if (
+          currentTurn &&
+          currentTurn.waitingFor &&
+          currentTurn.waitingFor !== myPeerId
+        ) {
+          alert(
+            "Wait for " +
+              allPlayers[currentTurn.waitingFor].name +
+              " to answer first!",
+          );
           return;
         }
-        
+
         const message = {
           id: Date.now(),
           type: "question",
@@ -1015,23 +1053,23 @@
           text: question,
           timestamp: Date.now(),
         };
-        
+
         // Add to Firebase
         roomsRef.child(currentRoomId).child("chat").push(message);
-        
+
         // Set turn to wait for answer
         roomsRef.child(currentRoomId).child("currentTurn").set({
           asker: myPeerId,
           waitingFor: target,
           questionId: message.id,
         });
-        
+
         // Broadcast to peers
         broadcastToPeers({
           type: "chat",
           message: message,
         });
-        
+
         chatInput.value = "";
       });
 
@@ -1043,21 +1081,23 @@
 
       function displayChat(chat) {
         if (!chat) return;
-        
-        const messages = Object.values(chat).sort((a, b) => a.timestamp - b.timestamp);
+
+        const messages = Object.values(chat).sort(
+          (a, b) => a.timestamp - b.timestamp,
+        );
         chatMessages.innerHTML = "";
-        
+
         messages.forEach((msg) => {
           addChatMessage(msg, false);
         });
-        
+
         chatMessages.scrollTop = chatMessages.scrollHeight;
       }
 
       function addChatMessage(msg, scrollToBottom = true) {
         const div = document.createElement("div");
         div.className = `chat-message ${msg.type}`;
-        
+
         if (msg.type === "question") {
           div.innerHTML = `
             <div class="sender">${msg.fromName}</div>
@@ -1069,9 +1109,9 @@
             <div class="text">answers: ${msg.text}</div>
           `;
         }
-        
+
         chatMessages.appendChild(div);
-        
+
         if (scrollToBottom) {
           chatMessages.scrollTop = chatMessages.scrollHeight;
         }
@@ -1079,13 +1119,14 @@
 
       function updateChatUI() {
         // Update player dropdown
-        targetPlayer.innerHTML = '<option value="">Select player to ask...</option>';
+        targetPlayer.innerHTML =
+          '<option value="">Select player to ask...</option>';
         Object.entries(allPlayers).forEach(([peerId, player]) => {
           if (peerId !== myPeerId && player.connected) {
             targetPlayer.innerHTML += `<option value="${peerId}">${player.name}</option>`;
           }
         });
-        
+
         // Show waiting message if needed
         if (currentTurn && currentTurn.waitingFor) {
           if (currentTurn.waitingFor === myPeerId) {
@@ -1097,20 +1138,24 @@
               <input type="text" id="answerInput" placeholder="Type your answer..." style="margin: 10px 0;" />
               <button onclick="sendAnswer()" class="success" style="width: 100%;">Send Answer</button>
             `;
-            
+
             // Check if waiting message already exists
             const existingWaiting = chatMessages.querySelector(".waiting");
             if (existingWaiting) {
               existingWaiting.remove();
             }
-            
+
             chatMessages.appendChild(waitingDiv);
             chatMessages.scrollTop = chatMessages.scrollHeight;
           }
         }
-        
+
         // Disable/enable asking based on turn
-        if (currentTurn && currentTurn.waitingFor && currentTurn.waitingFor !== myPeerId) {
+        if (
+          currentTurn &&
+          currentTurn.waitingFor &&
+          currentTurn.waitingFor !== myPeerId
+        ) {
           sendQuestionBtn.disabled = true;
           chatInput.disabled = true;
           targetPlayer.disabled = true;
@@ -1121,15 +1166,15 @@
         }
       }
 
-      window.sendAnswer = function() {
+      window.sendAnswer = function () {
         const answerInput = document.getElementById("answerInput");
         const answer = answerInput.value.trim();
-        
+
         if (!answer) {
           alert("Please type an answer");
           return;
         }
-        
+
         const message = {
           id: Date.now(),
           type: "answer",
@@ -1138,17 +1183,17 @@
           text: answer,
           timestamp: Date.now(),
         };
-        
+
         // Add to Firebase
         roomsRef.child(currentRoomId).child("chat").push(message);
-        
+
         // Clear turn - now answerer can ask
         roomsRef.child(currentRoomId).child("currentTurn").set({
           asker: myPeerId,
           waitingFor: null,
           questionId: null,
         });
-        
+
         // Broadcast to peers
         broadcastToPeers({
           type: "chat",
