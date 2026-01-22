@@ -373,10 +373,51 @@
         padding: 14px 20px;
         margin: 0;
       }
+
+      /* Online users counter */
+      .online-counter {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        background: #27ae60;
+        color: white;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: 600;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .online-counter::before {
+        content: "●";
+        font-size: 12px;
+        animation: pulse 2s infinite;
+      }
+
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+      }
+
+      @media (max-width: 600px) {
+        .online-counter {
+          top: 10px;
+          right: 10px;
+          font-size: 12px;
+          padding: 6px 12px;
+        }
+      }
     </style>
   </head>
   <body>
     <div class="container">
+      <div class="online-counter" id="onlineCounter">
+        <span id="onlineCount">0</span> online
+      </div>
+
       <!-- HOME SCREEN -->
       <div id="homeScreen">
         <h1>🕵️ Spyfall</h1>
@@ -486,6 +527,7 @@
       firebase.initializeApp(firebaseConfig);
       const database = firebase.database();
       const roomsRef = database.ref("rooms");
+      const onlineUsersRef = database.ref("onlineUsers");
 
       // Global state
       let peer = null;
@@ -524,6 +566,23 @@
       const chatInput = document.getElementById("chatInput");
       const targetPlayer = document.getElementById("targetPlayer");
       const sendQuestionBtn = document.getElementById("sendQuestionBtn");
+      const onlineCount = document.getElementById("onlineCount");
+
+      // Track online users
+      function trackOnlinePresence() {
+        if (!myPeerId) return;
+
+        const myConnectionRef = onlineUsersRef.child(myPeerId);
+        myConnectionRef.set(true);
+        myConnectionRef.onDisconnect().remove();
+
+        // Listen for online users count
+        onlineUsersRef.on("value", (snapshot) => {
+          const users = snapshot.val();
+          const count = users ? Object.keys(users).length : 0;
+          onlineCount.textContent = count;
+        });
+      }
 
       // Initialize PeerJS
       function initPeer() {
@@ -534,6 +593,7 @@
           myPeerId = id;
           createRoomBtn.disabled = false;
           loadRooms();
+          trackOnlinePresence();
         });
 
         peer.on("connection", (conn) => {
