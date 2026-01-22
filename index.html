@@ -218,18 +218,26 @@
 
       <div class="section">
         <h2>Create or Join a Room</h2>
-        <div style="margin-bottom: 15px;">
-          <input
-            type="text"
-            id="roomName"
-            placeholder="Enter room name"
-          />
+        <div style="margin-bottom: 15px">
+          <input type="text" id="roomName" placeholder="Enter room name" />
           <button id="createRoomBtn" disabled>Create Room</button>
         </div>
         <div>
-          <h3 style="font-size: 16px; color: #667eea; margin-bottom: 10px;">Available Rooms:</h3>
-          <div id="roomList" style="background: #f8f9fa; padding: 10px; border-radius: 8px; min-height: 60px;">
-            <p style="color: #999; text-align: center; padding: 20px 0;">Loading rooms...</p>
+          <h3 style="font-size: 16px; color: #667eea; margin-bottom: 10px">
+            Available Rooms:
+          </h3>
+          <div
+            id="roomList"
+            style="
+              background: #f8f9fa;
+              padding: 10px;
+              border-radius: 8px;
+              min-height: 60px;
+            "
+          >
+            <p style="color: #999; text-align: center; padding: 20px 0">
+              Loading rooms...
+            </p>
           </div>
         </div>
       </div>
@@ -258,7 +266,7 @@
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
-    
+
     <!-- PeerJS -->
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script>
@@ -270,13 +278,13 @@
         projectId: "spygame-fa5d0",
         storageBucket: "spygame-fa5d0.firebasestorage.app",
         messagingSenderId: "1031471679689",
-        appId: "1:1031471679689:web:e61361fe2f2a2079efa518"
+        appId: "1:1031471679689:web:e61361fe2f2a2079efa518",
       };
 
       // Initialize Firebase
       firebase.initializeApp(firebaseConfig);
       const database = firebase.database();
-      const roomsRef = database.ref('rooms');
+      const roomsRef = database.ref("rooms");
 
       let peer = null;
       let connections = {};
@@ -360,41 +368,46 @@
           return;
         }
 
-        const roomId = 'room_' + Date.now();
+        const roomId = "room_" + Date.now();
         myRoomId = roomId;
         isHost = true;
 
-        roomsRef.child(roomId).set({
-          name: roomName,
-          hostPeerId: peer.id,
-          createdAt: Date.now(),
-          players: 1
-        }).then(() => {
-          status.textContent = `Room "${roomName}" created - waiting for players...`;
-          status.className = "status waiting";
-          roomNameInput.value = "";
-          addMessage(`You created room "${roomName}"`, "system");
-          messageArea.classList.remove("hidden");
-          
-          // Remove room when host disconnects
-          roomsRef.child(roomId).onDisconnect().remove();
-        }).catch((error) => {
-          console.error("Error creating room:", error);
-          alert("Failed to create room");
-        });
+        roomsRef
+          .child(roomId)
+          .set({
+            name: roomName,
+            hostPeerId: peer.id,
+            createdAt: Date.now(),
+            players: 1,
+          })
+          .then(() => {
+            status.textContent = `Room "${roomName}" created - waiting for players...`;
+            status.className = "status waiting";
+            roomNameInput.value = "";
+            addMessage(`You created room "${roomName}"`, "system");
+            messageArea.classList.remove("hidden");
+
+            // Remove room when host disconnects
+            roomsRef.child(roomId).onDisconnect().remove();
+          })
+          .catch((error) => {
+            console.error("Error creating room:", error);
+            alert("Failed to create room");
+          });
       });
 
       // Load and display rooms
       function loadRooms() {
-        roomsRef.on('value', (snapshot) => {
+        roomsRef.on("value", (snapshot) => {
           const rooms = snapshot.val();
-          
+
           if (!rooms || Object.keys(rooms).length === 0) {
-            roomListDiv.innerHTML = '<p style="color: #999; text-align: center; padding: 20px 0;">No rooms available. Create one!</p>';
+            roomListDiv.innerHTML =
+              '<p style="color: #999; text-align: center; padding: 20px 0;">No rooms available. Create one!</p>';
             return;
           }
 
-          let roomsHtml = '';
+          let roomsHtml = "";
           Object.entries(rooms).forEach(([roomId, room]) => {
             if (roomId !== myRoomId) {
               roomsHtml += `
@@ -412,13 +425,14 @@
           if (roomsHtml) {
             roomListDiv.innerHTML = roomsHtml;
           } else if (myRoomId) {
-            roomListDiv.innerHTML = '<p style="color: #999; text-align: center; padding: 20px 0;">You\'re in a room!</p>';
+            roomListDiv.innerHTML =
+              '<p style="color: #999; text-align: center; padding: 20px 0;">You\'re in a room!</p>';
           }
         });
       }
 
       // Join room
-      window.joinRoom = function(roomId, hostPeerId, roomName) {
+      window.joinRoom = function (roomId, hostPeerId, roomName) {
         if (myRoomId) {
           alert("You're already in a room");
           return;
