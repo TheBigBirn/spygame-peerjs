@@ -650,9 +650,12 @@
           roomName.textContent = room.name;
 
           if (room.gameStarted && !gameState) {
-            // Game started, load state
+            // Game started, load state from Firebase
+            // This ensures all non-host players get the exact same game state
             gameState = room.gameState;
-            startGame();
+            if (gameState) {
+              startGame();
+            }
           }
 
           // Sync timer state
@@ -767,13 +770,18 @@
               startTime: Date.now(),
             };
 
-            // Update Firebase
-            roomsRef.child(currentRoomId).update({
-              gameStarted: true,
-              gameState: gameState,
-            });
-
-            startGame();
+            // Update Firebase - this will trigger watchRoom on all clients
+            roomsRef
+              .child(currentRoomId)
+              .update({
+                gameStarted: true,
+                gameState: gameState,
+              })
+              .then(() => {
+                // Only start game after Firebase confirms the update
+                // This ensures all clients get the same state
+                startGame();
+              });
           });
       });
 
