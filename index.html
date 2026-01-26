@@ -291,133 +291,10 @@
         background: #fcf3cf;
         color: #7d6608;
       }
-
-      /* Chat */
-      .chat-container {
-        background: #ecf0f1;
-        border-radius: 12px;
-        padding: 15px;
-        margin-bottom: 20px;
-      }
-
-      .chat-messages {
-        max-height: 300px;
-        overflow-y: auto;
-        margin-bottom: 15px;
-        padding: 10px;
-        background: white;
-        border-radius: 8px;
-      }
-
-      .chat-message {
-        margin-bottom: 12px;
-        padding: 10px;
-        border-radius: 8px;
-        background: #f8f9fa;
-      }
-
-      .chat-message.question {
-        background: #d6eaf8;
-        border-left: 4px solid #3498db;
-      }
-
-      .chat-message.answer {
-        background: #d5f4e6;
-        border-left: 4px solid #27ae60;
-      }
-
-      .chat-message .sender {
-        font-weight: 600;
-        color: #2c3e50;
-        margin-bottom: 4px;
-      }
-
-      .chat-message .target {
-        color: #e74c3c;
-        font-weight: 600;
-      }
-
-      .chat-message .text {
-        color: #34495e;
-      }
-
-      .chat-message.waiting {
-        background: #fcf3cf;
-        border-left: 4px solid #f39c12;
-        font-style: italic;
-        text-align: center;
-      }
-
-      .chat-input-group {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-      }
-
-      .chat-input-row {
-        display: flex;
-        gap: 10px;
-      }
-
-      .chat-input-group select,
-      .chat-input-group input {
-        margin-bottom: 0;
-      }
-
-      .chat-input-group select {
-        flex: 1;
-      }
-
-      .chat-input-row button {
-        width: auto;
-        padding: 14px 20px;
-        margin: 0;
-      }
-
-      /* Online users counter */
-      .online-counter {
-        position: absolute;
-        top: 20px;
-        right: 20px;
-        background: #27ae60;
-        color: white;
-        padding: 8px 16px;
-        border-radius: 20px;
-        font-size: 14px;
-        font-weight: 600;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-
-      .online-counter::before {
-        content: "●";
-        font-size: 12px;
-        animation: pulse 2s infinite;
-      }
-
-      @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-      }
-
-      @media (max-width: 600px) {
-        .online-counter {
-          top: 10px;
-          right: 10px;
-          font-size: 12px;
-          padding: 6px 12px;
-        }
-      }
     </style>
   </head>
   <body>
     <div class="container">
-      <div class="online-counter" id="onlineCounter">
-        <span id="onlineCount">0</span> online
-      </div>
-
       <!-- HOME SCREEN -->
       <div id="homeScreen">
         <h1>🕵️ Spyfall</h1>
@@ -466,25 +343,6 @@
         <h2>Players</h2>
         <div id="gamePlayers" class="player-list"></div>
 
-        <!-- Chat -->
-        <div class="chat-container">
-          <h2>Chat & Questions</h2>
-          <div id="chatMessages" class="chat-messages"></div>
-          <div class="chat-input-group">
-            <select id="targetPlayer">
-              <option value="">Select player to ask...</option>
-            </select>
-            <div class="chat-input-row">
-              <input
-                type="text"
-                id="chatInput"
-                placeholder="Type your question..."
-              />
-              <button id="sendQuestionBtn" class="success">Ask</button>
-            </div>
-          </div>
-        </div>
-
         <!-- Timer -->
         <div class="timer-section">
           <div class="timer-display" id="timerDisplay">8:00</div>
@@ -506,9 +364,6 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 
-    <!-- PeerJS -->
-    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-
     <!-- Game Data -->
     <script src="game-data.js"></script>
 
@@ -527,19 +382,15 @@
       firebase.initializeApp(firebaseConfig);
       const database = firebase.database();
       const roomsRef = database.ref("rooms");
-      const onlineUsersRef = database.ref("onlineUsers");
 
       // Global state
-      let peer = null;
       let myPeerId = null;
       let myUsername = null;
       let currentRoomId = null;
       let isHost = false;
-      let connections = {};
       let timerInterval = null;
       let timerSeconds = 0;
       let gameState = null;
-      let currentTurn = null;
       let allPlayers = {};
 
       // DOM elements
@@ -562,91 +413,13 @@
       const stopTimerBtn = document.getElementById("stopTimerBtn");
       const endGameBtn = document.getElementById("endGameBtn");
       const roomName = document.getElementById("roomName");
-      const chatMessages = document.getElementById("chatMessages");
-      const chatInput = document.getElementById("chatInput");
-      const targetPlayer = document.getElementById("targetPlayer");
-      const sendQuestionBtn = document.getElementById("sendQuestionBtn");
-      const onlineCount = document.getElementById("onlineCount");
 
-      // Track online users
-      function trackOnlinePresence() {
-        if (!myPeerId) return;
-
-        const myConnectionRef = onlineUsersRef.child(myPeerId);
-        myConnectionRef.set(true);
-        myConnectionRef.onDisconnect().remove();
-
-        // Listen for online users count
-        onlineUsersRef.on("value", (snapshot) => {
-          const users = snapshot.val();
-          const count = users ? Object.keys(users).length : 0;
-          onlineCount.textContent = count;
-        });
-      }
-
-      // Initialize PeerJS
-      function initPeer() {
-        peer = new Peer();
-
-        peer.on("open", (id) => {
-          console.log("My peer ID:", id);
-          myPeerId = id;
-          createRoomBtn.disabled = false;
-          loadRooms();
-          trackOnlinePresence();
-        });
-
-        peer.on("connection", (conn) => {
-          console.log("Incoming connection from:", conn.peer);
-          setupConnection(conn);
-        });
-
-        peer.on("error", (err) => {
-          console.error("Peer error:", err);
-          alert("Connection error: " + err.message);
-        });
-      }
-
-      // Setup peer connection
-      function setupConnection(conn) {
-        connections[conn.peer] = conn;
-
-        conn.on("open", () => {
-          console.log("Connection established with:", conn.peer);
-        });
-
-        conn.on("data", (data) => {
-          console.log("Received data:", data);
-          handlePeerMessage(data);
-        });
-
-        conn.on("close", () => {
-          console.log("Connection closed with:", conn.peer);
-          delete connections[conn.peer];
-        });
-      }
-
-      // Handle messages from peers
-      function handlePeerMessage(data) {
-        if (data.type === "gameStart") {
-          gameState = data.gameState;
-          startGame();
-        } else if (data.type === "gameEnd") {
-          endGame();
-        } else if (data.type === "timerStart") {
-          startTimerSync(data.seconds);
-        } else if (data.type === "timerStop") {
-          stopTimer();
-        } else if (data.type === "chat") {
-          addChatMessage(data.message);
-        }
-      }
-
-      // Send message to all peers
-      function broadcastToPeers(data) {
-        Object.values(connections).forEach((conn) => {
-          conn.send(data);
-        });
+      // Initialize app
+      function initApp() {
+        myPeerId =
+          "user_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+        createRoomBtn.disabled = false;
+        loadRooms();
       }
 
       // Enable create button when username is entered
@@ -804,22 +577,6 @@
                   .child("connected");
                 playerPresenceRef.onDisconnect().set(false);
 
-                // Connect to all existing players in room (exclude self)
-                Object.entries(room.players || {}).forEach(
-                  ([peerId, player]) => {
-                    if (
-                      peerId !== myPeerId &&
-                      player &&
-                      player.peerId &&
-                      !connections[peerId]
-                    ) {
-                      console.log("Connecting to player:", peerId, player.name);
-                      const conn = peer.connect(peerId);
-                      setupConnection(conn);
-                    }
-                  },
-                );
-
                 showLobby();
                 watchRoom();
               });
@@ -855,19 +612,7 @@
           if (room.gameStarted && !gameState) {
             // Game started, load state
             gameState = room.gameState;
-            currentTurn = room.currentTurn || null;
             startGame();
-          }
-
-          // Update chat if game is running
-          if (gameState && room.chat) {
-            displayChat(room.chat);
-          }
-
-          // Update current turn
-          if (room.currentTurn) {
-            currentTurn = room.currentTurn;
-            updateChatUI();
           }
 
           // Sync timer state
@@ -925,13 +670,9 @@
           roomsRef.child(currentRoomId).off();
         }
 
-        Object.values(connections).forEach((conn) => conn.close());
-        connections = {};
-
         currentRoomId = null;
         isHost = false;
         gameState = null;
-        currentTurn = null;
 
         homeScreen.classList.remove("hidden");
         lobbyScreen.classList.add("hidden");
@@ -982,12 +723,6 @@
               gameState: gameState,
             });
 
-            // Broadcast to peers
-            broadcastToPeers({
-              type: "gameStart",
-              gameState: gameState,
-            });
-
             startGame();
           });
       });
@@ -1022,9 +757,6 @@
         // Setup timer
         timerSeconds = gameState.duration;
         updateTimerDisplay();
-
-        // Populate player dropdown for chat
-        updateChatUI();
       }
 
       // Toggle location crossed off
@@ -1044,12 +776,6 @@
             timerStartTime: Date.now(),
           });
 
-          // Broadcast to peers (backup)
-          broadcastToPeers({
-            type: "timerStart",
-            seconds: timerSeconds,
-          });
-
           startTimerSync(timerSeconds);
         }
       });
@@ -1060,9 +786,6 @@
           timerRunning: false,
           timerSeconds: timerSeconds,
         });
-
-        // Broadcast to peers (backup)
-        broadcastToPeers({ type: "timerStop" });
 
         stopTimer();
       });
@@ -1096,203 +819,14 @@
         timerDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, "0")}`;
       }
 
-      // Chat functions
-      sendQuestionBtn.addEventListener("click", () => {
-        const target = targetPlayer.value;
-        const question = chatInput.value.trim();
-
-        if (!target) {
-          alert("Please select a player to ask");
-          return;
-        }
-
-        if (!question) {
-          alert("Please type a question");
-          return;
-        }
-
-        if (
-          currentTurn &&
-          currentTurn.waitingFor &&
-          currentTurn.waitingFor !== myPeerId
-        ) {
-          alert(
-            "Wait for " +
-              allPlayers[currentTurn.waitingFor].name +
-              " to answer first!",
-          );
-          return;
-        }
-
-        const message = {
-          id: Date.now(),
-          type: "question",
-          from: myPeerId,
-          fromName: myUsername,
-          to: target,
-          toName: allPlayers[target].name,
-          text: question,
-          timestamp: Date.now(),
-        };
-
-        // Add to Firebase
-        roomsRef.child(currentRoomId).child("chat").push(message);
-
-        // Set turn to wait for answer
-        roomsRef.child(currentRoomId).child("currentTurn").set({
-          asker: myPeerId,
-          waitingFor: target,
-          questionId: message.id,
-        });
-
-        // Broadcast to peers
-        broadcastToPeers({
-          type: "chat",
-          message: message,
-        });
-
-        chatInput.value = "";
-      });
-
-      chatInput.addEventListener("keypress", (e) => {
-        if (e.key === "Enter") {
-          sendQuestionBtn.click();
-        }
-      });
-
-      function displayChat(chat) {
-        if (!chat) return;
-
-        const messages = Object.values(chat).sort(
-          (a, b) => a.timestamp - b.timestamp,
-        );
-        chatMessages.innerHTML = "";
-
-        messages.forEach((msg) => {
-          addChatMessage(msg, false);
-        });
-
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-      }
-
-      function addChatMessage(msg, scrollToBottom = true) {
-        const div = document.createElement("div");
-        div.className = `chat-message ${msg.type}`;
-
-        if (msg.type === "question") {
-          div.innerHTML = `
-            <div class="sender">${msg.fromName}</div>
-            <div class="text">asks <span class="target">${msg.toName}</span>: ${msg.text}</div>
-          `;
-        } else if (msg.type === "answer") {
-          div.innerHTML = `
-            <div class="sender">${msg.fromName}</div>
-            <div class="text">answers: ${msg.text}</div>
-          `;
-        }
-
-        chatMessages.appendChild(div);
-
-        if (scrollToBottom) {
-          chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-      }
-
-      function updateChatUI() {
-        // Update player dropdown
-        targetPlayer.innerHTML =
-          '<option value="">Select player to ask...</option>';
-        Object.entries(allPlayers).forEach(([peerId, player]) => {
-          if (peerId !== myPeerId && player.connected) {
-            targetPlayer.innerHTML += `<option value="${peerId}">${player.name}</option>`;
-          }
-        });
-
-        // Show waiting message if needed
-        if (currentTurn && currentTurn.waitingFor) {
-          if (currentTurn.waitingFor === myPeerId) {
-            // It's my turn to answer
-            const waitingDiv = document.createElement("div");
-            waitingDiv.className = "chat-message waiting";
-            waitingDiv.innerHTML = `
-              <div>It's your turn to answer!</div>
-              <input type="text" id="answerInput" placeholder="Type your answer..." style="margin: 10px 0;" />
-              <button onclick="sendAnswer()" class="success" style="width: 100%;">Send Answer</button>
-            `;
-
-            // Check if waiting message already exists
-            const existingWaiting = chatMessages.querySelector(".waiting");
-            if (existingWaiting) {
-              existingWaiting.remove();
-            }
-
-            chatMessages.appendChild(waitingDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-          }
-        }
-
-        // Disable/enable asking based on turn
-        if (
-          currentTurn &&
-          currentTurn.waitingFor &&
-          currentTurn.waitingFor !== myPeerId
-        ) {
-          sendQuestionBtn.disabled = true;
-          chatInput.disabled = true;
-          targetPlayer.disabled = true;
-        } else {
-          sendQuestionBtn.disabled = false;
-          chatInput.disabled = false;
-          targetPlayer.disabled = false;
-        }
-      }
-
-      window.sendAnswer = function () {
-        const answerInput = document.getElementById("answerInput");
-        const answer = answerInput.value.trim();
-
-        if (!answer) {
-          alert("Please type an answer");
-          return;
-        }
-
-        const message = {
-          id: Date.now(),
-          type: "answer",
-          from: myPeerId,
-          fromName: myUsername,
-          text: answer,
-          timestamp: Date.now(),
-        };
-
-        // Add to Firebase
-        roomsRef.child(currentRoomId).child("chat").push(message);
-
-        // Clear turn - now answerer can ask
-        roomsRef.child(currentRoomId).child("currentTurn").set({
-          asker: myPeerId,
-          waitingFor: null,
-          questionId: null,
-        });
-
-        // Broadcast to peers
-        broadcastToPeers({
-          type: "chat",
-          message: message,
-        });
-      };
-
       // End game
       endGameBtn.addEventListener("click", () => {
         if (confirm("Are you sure you want to end the game?")) {
           roomsRef.child(currentRoomId).update({
             gameStarted: false,
             gameState: null,
-            currentTurn: null,
-            chat: null,
             timerRunning: false,
           });
-          broadcastToPeers({ type: "gameEnd" });
           endGame();
         }
       });
@@ -1300,13 +834,11 @@
       function endGame() {
         stopTimer();
         gameState = null;
-        currentTurn = null;
-        chatMessages.innerHTML = "";
         showLobby();
       }
 
       // Initialize
-      initPeer();
+      initApp();
     </script>
   </body>
 </html>
