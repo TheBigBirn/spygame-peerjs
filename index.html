@@ -175,6 +175,26 @@
         margin-left: 10px;
       }
 
+      .player .player-name {
+        flex: 1;
+      }
+
+      .player .remove-btn {
+        background: #e74c3c;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 600;
+        transition: background 0.3s;
+      }
+
+      .player .remove-btn:hover {
+        background: #c0392b;
+      }
+
       /* Role card */
       .role-card {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -535,6 +555,26 @@
         }
       };
 
+      // Remove player from room
+      window.removePlayer = function (peerId) {
+        if (!currentRoomId) return;
+
+        if (confirm("Remove this player from the room?")) {
+          roomsRef
+            .child(currentRoomId)
+            .child("players")
+            .child(peerId)
+            .remove()
+            .then(() => {
+              console.log("Player removed:", peerId);
+            })
+            .catch((error) => {
+              console.error("Error removing player:", error);
+              alert("Failed to remove player");
+            });
+        }
+      };
+
       // Join room
       window.joinRoom = function (roomId) {
         const username = usernameInput.value.trim();
@@ -636,13 +676,23 @@
       function updatePlayerList(players) {
         if (!players) return;
 
-        let html = "";
-        Object.values(players).forEach((player) => {
-          html += `<div class="player${player.isHost ? " host" : ""}">${player.name}</div>`;
+        let lobbyHtml = "";
+        let gameHtml = "";
+
+        Object.entries(players).forEach(([peerId, player]) => {
+          // Lobby view with remove button (only show for host or if it's you)
+          const canRemove = isHost || peerId === myPeerId;
+          lobbyHtml += `<div class="player${player.isHost ? " host" : ""}">
+            <span class="player-name">${player.name}</span>
+            ${canRemove && !player.isHost ? `<button class="remove-btn" onclick="removePlayer('${peerId}')">Remove</button>` : ""}
+          </div>`;
+
+          // Game view without remove button
+          gameHtml += `<div class="player${player.isHost ? " host" : ""}">${player.name}</div>`;
         });
 
-        playerList.innerHTML = html;
-        gamePlayers.innerHTML = html;
+        playerList.innerHTML = lobbyHtml;
+        gamePlayers.innerHTML = gameHtml;
       }
 
       // Show lobby
