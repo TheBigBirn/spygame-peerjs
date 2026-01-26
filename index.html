@@ -180,19 +180,24 @@
       }
 
       .player .remove-btn {
-        background: #e74c3c;
-        color: white;
+        background: transparent;
+        color: #e74c3c;
         border: none;
-        padding: 6px 12px;
-        border-radius: 4px;
+        padding: 4px;
         cursor: pointer;
-        font-size: 12px;
-        font-weight: 600;
-        transition: background 0.3s;
+        font-size: 16px;
+        line-height: 1;
+        transition:
+          transform 0.2s,
+          color 0.2s;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
       }
 
       .player .remove-btn:hover {
-        background: #c0392b;
+        color: #c0392b;
+        transform: scale(1.2);
       }
 
       /* Role card */
@@ -347,6 +352,16 @@
           <label for="gameDuration">Game Duration (minutes)</label>
           <input type="number" id="gameDuration" value="8" min="1" max="30" />
         </div>
+        <div class="settings-group">
+          <label for="locationCount">Number of Locations</label>
+          <input
+            type="number"
+            id="locationCountInput"
+            value="27"
+            min="3"
+            max="27"
+          />
+        </div>
         <button id="startGameBtn" class="success">Start Game</button>
 
         <button id="leaveLobbyBtn" class="danger">Leave Room</button>
@@ -425,6 +440,7 @@
       const startGameBtn = document.getElementById("startGameBtn");
       const leaveLobbyBtn = document.getElementById("leaveLobbyBtn");
       const gameDuration = document.getElementById("gameDuration");
+      const locationCountInput = document.getElementById("locationCountInput");
       const roleCard = document.getElementById("roleCard");
       const locationsGrid = document.getElementById("locationsGrid");
       const locationCount = document.getElementById("locationCount");
@@ -687,7 +703,7 @@
           const canRemove = isHost || peerId === myPeerId;
           lobbyHtml += `<div class="player${player.isHost ? " host" : ""}">
             <span class="player-name">${player.name}</span>
-            ${canRemove && !player.isHost ? `<button class="remove-btn" onclick="removePlayer('${peerId}')">Remove</button>` : ""}
+            ${canRemove && !player.isHost ? `<button class="remove-btn" onclick="removePlayer('${peerId}')" title="Remove player">🗑️</button>` : ""}
           </div>`;
 
           // Game view without remove button
@@ -747,8 +763,15 @@
             }
 
             // Assign roles
+            const numLocations = Math.min(
+              parseInt(locationCountInput.value) || 27,
+              GAME_LOCATIONS.length,
+            );
+            const availableLocations = GAME_LOCATIONS.slice(0, numLocations);
             const location =
-              GAME_LOCATIONS[Math.floor(Math.random() * GAME_LOCATIONS.length)];
+              availableLocations[
+                Math.floor(Math.random() * availableLocations.length)
+              ];
             const spyIndex = Math.floor(Math.random() * players.length);
 
             const assignments = {};
@@ -768,6 +791,7 @@
               assignments: assignments,
               duration: parseInt(gameDuration.value) * 60,
               startTime: Date.now(),
+              numLocations: numLocations,
             };
 
             // Update Firebase - this will trigger watchRoom on all clients
@@ -804,7 +828,10 @@
 
         // Show all locations
         locationsGrid.innerHTML = "";
-        GAME_LOCATIONS.forEach((loc) => {
+        const numLocations = gameState.numLocations || GAME_LOCATIONS.length;
+        const locationsToShow = GAME_LOCATIONS.slice(0, numLocations);
+        locationCount.textContent = numLocations;
+        locationsToShow.forEach((loc) => {
           const div = document.createElement("div");
           div.className = "location";
           div.textContent = loc.name;
@@ -821,7 +848,8 @@
       function toggleLocation(element) {
         element.classList.toggle("crossed");
         const crossed = document.querySelectorAll(".location.crossed").length;
-        locationCount.textContent = GAME_LOCATIONS.length - crossed;
+        const numLocations = gameState.numLocations || GAME_LOCATIONS.length;
+        locationCount.textContent = numLocations - crossed;
       }
 
       // Timer functions
