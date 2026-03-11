@@ -518,6 +518,135 @@
         font-size: 12px;
         color: #7f8c8d;
       }
+
+      .players-voting-header {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        margin-bottom: 8px;
+      }
+
+      .players-voting-header h2 {
+        margin: 0;
+      }
+
+      .voting-header {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #2c3e50;
+      }
+
+      .voting-controls {
+        margin-bottom: 16px;
+      }
+
+      .voting-hint {
+        font-size: 14px;
+        color: #2c3e50;
+        margin-bottom: 8px;
+      }
+
+      .vote-target {
+        padding: 12px;
+        background: white;
+        border: 2px solid #bdc3c7;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 500;
+        color: #2c3e50;
+        transition: all 0.2s;
+        margin-bottom: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        text-align: left;
+      }
+
+      .vote-target:hover {
+        border-color: #3498db;
+        background: #ebf5fb;
+        color: #2c3e50;
+      }
+
+      .vote-target.selected {
+        border-color: #27ae60;
+        background: #d5f4e6;
+        color: #1e8449;
+      }
+
+      .my-vote-display {
+        font-size: 14px;
+        color: #1e8449;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+
+      .vote-results-section {
+        margin: 20px 0;
+        padding: 16px;
+        background: #2c3e50;
+        color: white;
+        border-radius: 12px;
+      }
+
+      .vote-results-section h2 {
+        color: white;
+        margin-bottom: 12px;
+      }
+
+      .vote-result-item {
+        padding: 8px 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .vote-result-item.top-voted {
+        font-weight: 700;
+        color: #f39c12;
+      }
+
+      .vote-result-item.was-spy {
+        color: #e74c3c;
+      }
+
+      .vote-result-item.was-not-spy {
+        color: #27ae60;
+      }
+
+      .scores-display {
+        margin: 16px 0;
+        padding: 12px;
+        background: #ecf0f1;
+        border-radius: 8px;
+      }
+
+      .scores-display h4 {
+        margin-bottom: 8px;
+        font-size: 14px;
+      }
+
+      .spy-guess-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 8px;
+        max-height: 200px;
+        overflow-y: auto;
+      }
+
+      .spy-guess-btn {
+        padding: 10px;
+        background: white;
+        border: 2px solid #bdc3c7;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+      }
+
+      .spy-guess-btn:hover {
+        border-color: #3498db;
+      }
     </style>
   </head>
   <body>
@@ -585,7 +714,6 @@
 
       <!-- LOBBY SCREEN -->
       <div id="lobbyScreen" class="hidden">
-        <h1>🕵️ Spyfall</h1>
         <p class="subtitle" id="roomName">Room Name</p>
 
         <h2>Players in Lobby</h2>
@@ -605,6 +733,15 @@
             max="27"
           />
         </div>
+        <div class="settings-group">
+          <label style="display: block; margin-bottom: 8px;">Keep score across rounds</label>
+          <div class="scoring-toggle mode-toggle">
+            <button type="button" id="scoringOnBtn" class="active">Keep score</button>
+            <button type="button" id="scoringOffBtn">No score</button>
+          </div>
+          <input type="checkbox" id="scoringEnabled" checked style="display: none;" />
+        </div>
+        <div id="lobbyScores" class="scores-display hidden"></div>
         <button id="startGameBtn" class="success">Start Game</button>
 
         <button id="leaveLobbyBtn" class="danger">Leave Room</button>
@@ -617,9 +754,17 @@
         <!-- Role Card -->
         <div id="roleCard" class="role-card"></div>
 
-        <!-- Players -->
-        <h2>Players</h2>
+        <!-- Players & Voting (combined) -->
+        <div class="players-voting-header">
+          <h2>Players</h2>
+          <h2 id="votingHeader" class="voting-header hidden">🗳️ Vote for the Spy</h2>
+        </div>
         <div id="gamePlayers" class="player-list"></div>
+        <div id="votingControls" class="voting-controls hidden">
+          <p class="voting-hint">Tap a player to cast your vote. You can change your vote until results are revealed.</p>
+          <p id="myVoteDisplay" class="my-vote-display"></p>
+          <button id="revealVotesBtn" class="secondary" style="display: none;">Reveal Votes</button>
+        </div>
 
         <!-- Timer -->
         <div class="timer-section">
@@ -634,15 +779,33 @@
         <h2>Game Locations (<span id="locationCount">27</span>)</h2>
         <div id="locationsGrid" class="locations-grid"></div>
 
+        <!-- Vote Results -->
+        <div id="voteResultsSection" class="vote-results-section hidden">
+          <h2>Vote Results</h2>
+          <div id="voteResultsContent"></div>
+          <div id="roundScoresDisplay" class="hidden"></div>
+          <div id="totalScoresDisplay" class="hidden"></div>
+          <button id="nextRoundBtn" class="success hidden" style="margin-top: 12px;">Next Round</button>
+        </div>
+
         <button id="endGameBtn" class="danger">End Game</button>
       </div>
     </div>
 
-    <!-- Player selection modal (join in-progress game) -->
+    <!-- Spy location guess modal -->
+    <div id="spyGuessModal" class="modal-overlay hidden">
+      <div class="modal-content">
+        <h3>🕵️ Guess the Location</h3>
+        <p style="margin-bottom: 16px;">You were the spy! Guess which location the others were at. Correct guess = +100 points.</p>
+        <div id="spyGuessGrid" class="spy-guess-grid"></div>
+      </div>
+    </div>
+
+    <!-- Player selection modal (rejoin as existing player) -->
     <div id="playerSelectModal" class="modal-overlay hidden">
       <div class="modal-content">
         <h3>Select which player you are</h3>
-        <p style="margin-bottom: 16px; color: #7f8c8d;">Rejoin this game by selecting your name from the list.</p>
+        <p style="margin-bottom: 16px; color: #7f8c8d;">Rejoin by selecting your name from the list.</p>
         <div id="playerSelectList"></div>
         <button id="playerSelectCancelBtn" class="secondary" style="margin-top: 16px;">Cancel</button>
       </div>
@@ -713,6 +876,19 @@
       const rejoinSection = document.getElementById("rejoinSection");
       const rejoinRoomInfo = document.getElementById("rejoinRoomInfo");
       const rejoinBtn = document.getElementById("rejoinBtn");
+      const myVoteDisplay = document.getElementById("myVoteDisplay");
+      const revealVotesBtn = document.getElementById("revealVotesBtn");
+      const voteResultsSection = document.getElementById("voteResultsSection");
+      const voteResultsContent = document.getElementById("voteResultsContent");
+      const votingHeader = document.getElementById("votingHeader");
+      const votingControls = document.getElementById("votingControls");
+      const scoringEnabledInput = document.getElementById("scoringEnabled");
+      const lobbyScores = document.getElementById("lobbyScores");
+      const spyGuessModal = document.getElementById("spyGuessModal");
+      const spyGuessGrid = document.getElementById("spyGuessGrid");
+      const roundScoresDisplay = document.getElementById("roundScoresDisplay");
+      const totalScoresDisplay = document.getElementById("totalScoresDisplay");
+      const nextRoundBtn = document.getElementById("nextRoundBtn");
 
       const STORAGE_KEY = "spygame_player";
       const COOKIE_DAYS = 7;
@@ -774,6 +950,16 @@
 
       localModeBtn.addEventListener("click", () => setGameMode("local"));
       onlineModeBtn.addEventListener("click", () => setGameMode("online"));
+
+      const scoringOnBtn = document.getElementById("scoringOnBtn");
+      const scoringOffBtn = document.getElementById("scoringOffBtn");
+      function setScoringToggle(enabled) {
+        scoringEnabledInput.checked = enabled;
+        scoringOnBtn.classList.toggle("active", enabled);
+        scoringOffBtn.classList.toggle("active", !enabled);
+      }
+      scoringOnBtn.addEventListener("click", () => setScoringToggle(true));
+      scoringOffBtn.addEventListener("click", () => setScoringToggle(false));
 
       function checkRejoinAvailable() {
         const cookie = getPlayerCookie();
@@ -893,6 +1079,14 @@
             '<span class="tile-number">Player ' + playerNum + "</span>" +
             '<span class="tile-viewed-badge">✓ Viewed</span>';
         } else {
+          // Hide any other currently revealed tile (only one at a time)
+          playerTilesGrid.querySelectorAll(".player-tile.revealed").forEach((other) => {
+            if (other !== tile) {
+              const otherNum = parseInt(other.dataset.player, 10);
+              other.classList.remove("revealed", "spy");
+              other.innerHTML = '<span class="tile-number">Player ' + otherNum + "</span>";
+            }
+          });
           tile.classList.add("revealed");
           if (assignment.isSpy) tile.classList.add("spy");
           tile.innerHTML =
@@ -1110,8 +1304,9 @@
                     <h3>${roomName}</h3>
                     <p>${playerCount} player(s)</p>
                   </div>
-                  <div style="display: flex; gap: 10px;">
+                  <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                     <button class="room-join-btn" data-room-id="${safeRoomId}">Join</button>
+                    <button class="room-join-as-player-btn" data-room-id="${safeRoomId}" data-join-mode="lobby">Join as Player</button>
                     <button class="room-delete-btn danger" data-room-id="${safeRoomId}" style="width: auto; padding: 10px 16px;">Delete</button>
                   </div>
                 </div>
@@ -1124,7 +1319,7 @@
                     <p>${playerCount} player(s) · Game in progress</p>
                   </div>
                   <div style="display: flex; gap: 10px;">
-                    <button class="room-join-as-player-btn" data-room-id="${safeRoomId}">Join as Player</button>
+                    <button class="room-join-as-player-btn" data-room-id="${safeRoomId}" data-join-mode="game">Join as Player</button>
                   </div>
                 </div>
               `;
@@ -1132,8 +1327,15 @@
           });
 
           let fullHtml = "";
+          const lobbyRoomIds = [];
+          Object.entries(rooms).forEach(([roomId, room]) => {
+            if (room && typeof room === "object" && !room.gameStarted) lobbyRoomIds.push(roomId);
+          });
           if (roomsHtml) {
-            fullHtml += "<h3 style=\"margin-bottom: 10px; font-size: 16px;\">Lobbies</h3>" + roomsHtml;
+            fullHtml += "<div style=\"display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;\">" +
+              "<h3 style=\"margin: 0; font-size: 16px;\">Lobbies</h3>" +
+              (lobbyRoomIds.length > 0 ? "<button id=\"deleteAllLobbiesBtn\" class=\"danger\" style=\"padding: 8px 14px; font-size: 14px;\">Delete all lobby rooms</button>" : "") +
+              "</div>" + roomsHtml;
           }
           if (inProgressHtml) {
             fullHtml += "<h3 style=\"margin: 20px 0 10px; font-size: 16px;\">In-Progress Games</h3>" + inProgressHtml;
@@ -1149,7 +1351,8 @@
             btn.onclick = () => joinRoom(btn.getAttribute("data-room-id"));
           });
           roomList.querySelectorAll(".room-join-as-player-btn").forEach((btn) => {
-            btn.onclick = () => showPlayerSelectModal(btn.getAttribute("data-room-id"));
+            const mode = btn.getAttribute("data-join-mode") || "game";
+            btn.onclick = () => showPlayerSelectModal(btn.getAttribute("data-room-id"), mode);
           });
           roomList.querySelectorAll(".room-delete-btn").forEach((btn) => {
             btn.onclick = () => {
@@ -1158,6 +1361,14 @@
               }
             };
           });
+          const deleteAllLobbiesBtn = document.getElementById("deleteAllLobbiesBtn");
+          if (deleteAllLobbiesBtn && lobbyRoomIds.length > 0) {
+            deleteAllLobbiesBtn.onclick = () => {
+              if (confirm(`Delete all ${lobbyRoomIds.length} lobby room(s)? This cannot be undone.`)) {
+                deleteAllLobbyRooms(lobbyRoomIds);
+              }
+            };
+          }
         };
 
         const cancelCallback = (err) => {
@@ -1188,6 +1399,19 @@
             alert("Failed to delete room");
           });
       };
+
+      // Delete all lobby rooms (caller handles confirm)
+      function deleteAllLobbyRooms(roomIds) {
+        if (!roomIds || roomIds.length === 0) return;
+        Promise.all(roomIds.map((roomId) => roomsRef.child(roomId).remove()))
+          .then(() => {
+            console.log("Deleted", roomIds.length, "lobby room(s)");
+          })
+          .catch((error) => {
+            console.error("Error deleting rooms:", error);
+            alert("Failed to delete some rooms");
+          });
+      }
 
       // Remove player from room
       window.removePlayer = function (peerId) {
@@ -1267,15 +1491,22 @@
           });
       };
 
-      // Join in-progress game as existing player
+      // Join as existing player (lobby or in-progress game)
       let pendingJoinRoomId = null;
+      let pendingJoinMode = "game";
 
-      function showPlayerSelectModal(roomId) {
+      function showPlayerSelectModal(roomId, mode) {
         pendingJoinRoomId = roomId;
+        pendingJoinMode = mode || "game";
         roomsRef.child(roomId).once("value").then((snapshot) => {
           const room = snapshot.val();
-          if (!room || !room.gameStarted) {
-            alert("Room no longer exists or game has not started");
+          if (!room) {
+            alert("Room no longer exists");
+            pendingJoinRoomId = null;
+            return;
+          }
+          if (pendingJoinMode === "game" && !room.gameStarted) {
+            alert("Game has not started yet. Use \"Join as Player\" from the Lobbies section to rejoin.");
             pendingJoinRoomId = null;
             return;
           }
@@ -1301,6 +1532,7 @@
 
       function selectPlayerToRejoin(peerId, name) {
         const roomId = pendingJoinRoomId;
+        const mode = pendingJoinMode;
         if (!roomId) return;
 
         myPeerId = peerId;
@@ -1308,12 +1540,13 @@
         currentRoomId = roomId;
         usernameInput.value = myUsername;
         pendingJoinRoomId = null;
+        pendingJoinMode = "game";
         document.getElementById("playerSelectModal").classList.add("hidden");
 
         roomsRef.child(roomId).once("value").then((snapshot) => {
           const room = snapshot.val();
           if (!room || !room.players[peerId]) {
-            alert("Player no longer in this game");
+            alert("Player no longer in this room");
             return;
           }
           isHost = room.hostPeerId === peerId;
@@ -1326,8 +1559,12 @@
           playerPresenceRef.onDisconnect().set(false);
 
           setPlayerCookie(roomId, peerId, myUsername);
-          gameState = room.gameState;
-          startGame();
+          if (mode === "lobby" || !room.gameStarted) {
+            showLobby();
+          } else {
+            gameState = room.gameState;
+            startGame();
+          }
           watchRoom();
         }).catch((err) => {
           console.error("Join as player error:", err);
@@ -1337,6 +1574,7 @@
 
       document.getElementById("playerSelectCancelBtn").addEventListener("click", () => {
         pendingJoinRoomId = null;
+        pendingJoinMode = "game";
         document.getElementById("playerSelectModal").classList.add("hidden");
       });
 
@@ -1365,6 +1603,26 @@
           allPlayers = room.players || {};
           updatePlayerList(room.players);
           roomName.textContent = room.name;
+
+          if (!room.gameStarted) {
+            if (room.scores && Object.keys(room.scores).length > 0) {
+              lobbyScores.classList.remove("hidden");
+              let html = "<h4>Total scores</h4>";
+              Object.entries(room.players || {}).forEach(([pid, player]) => {
+                html += `<div>${player.name || "Unknown"}: ${room.scores[pid] || 0} pts</div>`;
+              });
+              lobbyScores.innerHTML = html;
+            } else {
+              lobbyScores.classList.add("hidden");
+            }
+            if (room.scoringEnabled !== undefined) {
+              setScoringToggle(room.scoringEnabled === true);
+            }
+          }
+
+          if (gameState && room.gameStarted) {
+            updateVotingUI(room);
+          }
 
           if (room.gameStarted && !gameState) {
             // Game started, load state from Firebase
@@ -1414,6 +1672,247 @@
         playerList.innerHTML = lobbyHtml;
         gamePlayers.innerHTML = gameHtml;
       }
+
+      function updateVotingUI(room) {
+        const votes = room.votes || {};
+        const votesRevealed = room.votesRevealed || false;
+        const players = room.players || {};
+        const assignments = (room.gameState || gameState || {}).assignments || {};
+        const scoringEnabled = room.scoringEnabled || false;
+        const spyPeerId = Object.entries(assignments).find(([, a]) => a?.isSpy)?.[0];
+        const isSpy = spyPeerId === myPeerId;
+
+        if (votesRevealed) {
+          votingHeader.classList.add("hidden");
+          votingControls.classList.add("hidden");
+          myVoteDisplay.textContent = "";
+          revealVotesBtn.style.display = "none";
+          updatePlayerList(room.players);
+          renderVoteResults(room);
+
+          if (scoringEnabled && isSpy && !room.spyGuess) {
+            showSpyGuessModal(room);
+          } else if (scoringEnabled && room.spyGuess && !room.roundScores) {
+            calculateAndSaveRoundScores(room);
+          } else {
+            spyGuessModal.classList.add("hidden");
+          }
+
+          if (room.roundScores && scoringEnabled) {
+            showRoundAndTotalScores(room);
+            nextRoundBtn.classList.remove("hidden");
+            nextRoundBtn.style.display = isHost ? "block" : "none";
+          } else {
+            roundScoresDisplay.classList.add("hidden");
+            totalScoresDisplay.classList.add("hidden");
+            nextRoundBtn.classList.add("hidden");
+          }
+
+          voteResultsSection.classList.remove("hidden");
+        } else {
+          votingHeader.classList.remove("hidden");
+          votingControls.classList.remove("hidden");
+          voteResultsSection.classList.add("hidden");
+          revealVotesBtn.style.display = isHost ? "block" : "none";
+          const otherPlayers = Object.entries(players).filter(([pid]) => pid !== myPeerId);
+          gamePlayers.innerHTML = "";
+          if (otherPlayers.length === 0) {
+            gamePlayers.innerHTML = "<p class=\"voting-hint\">No other players to vote for.</p>";
+          } else {
+            otherPlayers.forEach(([peerId, player]) => {
+              const btn = document.createElement("button");
+              btn.className = "vote-target" + (votes[myPeerId] === peerId ? " selected" : "");
+              btn.textContent = player.name || "Player";
+              btn.dataset.peerId = peerId;
+              btn.onclick = () => castVote(peerId);
+              gamePlayers.appendChild(btn);
+            });
+          }
+          if (votes[myPeerId]) {
+            const votedName = players[votes[myPeerId]]?.name || "Unknown";
+            myVoteDisplay.textContent = "Your vote: " + votedName;
+          } else {
+            myVoteDisplay.textContent = "";
+          }
+        }
+      }
+
+      function castVote(peerId) {
+        if (!currentRoomId) return;
+        roomsRef.child(currentRoomId).child("votes").child(myPeerId).set(peerId);
+      }
+
+      function renderVoteResults(room) {
+        const votes = room.votes || {};
+        const players = room.players || {};
+        const assignments = (room.gameState || gameState || {}).assignments || {};
+        const actualLocation = (room.gameState || gameState)?.location;
+        const spyGuess = room.spyGuess;
+
+        const voteCounts = {};
+        Object.values(votes).forEach((votedFor) => {
+          voteCounts[votedFor] = (voteCounts[votedFor] || 0) + 1;
+        });
+
+        const sorted = Object.entries(voteCounts).sort((a, b) => b[1] - a[1]);
+        const maxVotes = sorted[0]?.[1] || 0;
+        const spyPeerId = Object.entries(assignments).find(([, a]) => a?.isSpy)?.[0];
+
+        let html = "";
+        Object.entries(players).forEach(([peerId, player]) => {
+          const count = voteCounts[peerId] || 0;
+          const isSpy = assignments[peerId]?.isSpy;
+          let cls = "vote-result-item";
+          if (count === maxVotes && maxVotes > 0) cls += " top-voted";
+          if (count > 0) {
+            if (isSpy) cls += " was-spy";
+            else cls += " was-not-spy";
+          }
+          let extra = "";
+          if (isSpy !== undefined && isSpy) {
+            extra = " — Was the spy!";
+            if (spyGuess) extra += spyGuess === actualLocation ? " Correct location guess (+100)!" : " Wrong guess.";
+          } else if (isSpy !== undefined) extra = " — Not the spy";
+          html += `<div class="${cls}">${player.name || "Unknown"}: ${count} vote(s)${extra}</div>`;
+        });
+        voteResultsContent.innerHTML = html || "<p>No votes cast.</p>";
+      }
+
+      function showSpyGuessModal(room) {
+        const locationName = (room.gameState || gameState)?.location;
+        const numLocations = (room.gameState || gameState)?.numLocations || 27;
+        const locations = GAME_LOCATIONS.slice(0, numLocations).map((l) => l.name);
+
+        spyGuessGrid.innerHTML = "";
+        locations.forEach((loc) => {
+          const btn = document.createElement("button");
+          btn.className = "spy-guess-btn";
+          btn.textContent = loc;
+          btn.onclick = () => submitSpyGuess(loc);
+          spyGuessGrid.appendChild(btn);
+        });
+        spyGuessModal.classList.remove("hidden");
+      }
+
+      function submitSpyGuess(locationName) {
+        if (!currentRoomId) return;
+        roomsRef.child(currentRoomId).update({ spyGuess: locationName });
+        spyGuessModal.classList.add("hidden");
+      }
+
+      function calculateAndSaveRoundScores(room) {
+        const votes = room.votes || {};
+        const players = room.players || {};
+        const assignments = (room.gameState || gameState || {}).assignments || {};
+        const actualLocation = (room.gameState || gameState)?.location;
+        const spyGuess = room.spyGuess;
+        const spyPeerId = Object.entries(assignments).find(([, a]) => a?.isSpy)?.[0];
+
+        const nonSpyPeerIds = Object.keys(players).filter((pid) => !assignments[pid]?.isSpy);
+        const numNonSpies = nonSpyPeerIds.length;
+        const voteCounts = {};
+        Object.values(votes).forEach((votedFor) => {
+          voteCounts[votedFor] = (voteCounts[votedFor] || 0) + 1;
+        });
+
+        const roundScores = {};
+        Object.keys(players).forEach((pid) => { roundScores[pid] = 0; });
+
+        nonSpyPeerIds.forEach((pid) => {
+          const votesAgainst = voteCounts[pid] || 0;
+          const nonVoters = numNonSpies - votesAgainst;
+          roundScores[pid] = Math.round((nonVoters / numNonSpies) * 100);
+        });
+
+        const spyLocationBonus = spyGuess === actualLocation ? 100 : 0;
+        roundScores[spyPeerId] = spyLocationBonus;
+
+        const correctGuessers = Object.entries(votes).filter(([, v]) => v === spyPeerId).map(([k]) => k);
+        const bonusEach = correctGuessers.length > 0 ? Math.round(spyLocationBonus / correctGuessers.length) : 0;
+        correctGuessers.forEach((pid) => {
+          roundScores[pid] += bonusEach;
+        });
+
+        const currentScores = room.scores || {};
+        const newScores = {};
+        Object.keys(players).forEach((pid) => {
+          newScores[pid] = (currentScores[pid] || 0) + (roundScores[pid] || 0);
+        });
+
+        roomsRef.child(currentRoomId).update({ roundScores, scores: newScores });
+      }
+
+      function showRoundAndTotalScores(room) {
+        const roundScores = room.roundScores || {};
+        const scores = room.scores || {};
+        const players = room.players || {};
+
+        let roundHtml = "<h4>This round:</h4>";
+        Object.entries(players).forEach(([pid, player]) => {
+          roundHtml += `<div>${player.name || "Unknown"}: +${roundScores[pid] || 0} pts</div>`;
+        });
+        roundScoresDisplay.innerHTML = roundHtml;
+        roundScoresDisplay.classList.remove("hidden");
+
+        let totalHtml = "<h4>Total scores:</h4>";
+        Object.entries(players).forEach(([pid, player]) => {
+          totalHtml += `<div>${player.name || "Unknown"}: ${scores[pid] || 0} pts</div>`;
+        });
+        totalScoresDisplay.innerHTML = totalHtml;
+        totalScoresDisplay.classList.remove("hidden");
+      }
+
+      revealVotesBtn.addEventListener("click", () => {
+        if (!currentRoomId || !isHost) return;
+        roomsRef.child(currentRoomId).update({ votesRevealed: true });
+      });
+
+      nextRoundBtn.addEventListener("click", () => {
+        if (!currentRoomId || !isHost) return;
+        roomsRef.child(currentRoomId).once("value").then((snapshot) => {
+          const room = snapshot.val();
+          const players = Object.values(room.players || {});
+          if (players.length < 3) {
+            alert("Need at least 3 players!");
+            return;
+          }
+          const numLocations = Math.min(parseInt(locationCountInput.value) || 27, GAME_LOCATIONS.length);
+          const availableLocations = GAME_LOCATIONS.slice(0, numLocations);
+          const location = availableLocations[Math.floor(Math.random() * availableLocations.length)];
+          const spyIndex = Math.floor(Math.random() * players.length);
+
+          const assignments = {};
+          players.forEach((player, index) => {
+            assignments[player.peerId] = {
+              isSpy: index === spyIndex,
+              location: index === spyIndex ? null : location.name,
+              role: index === spyIndex ? null : location.roles[index % location.roles.length],
+            };
+          });
+
+          gameState = {
+            location: location.name,
+            assignments,
+            duration: parseInt(gameDuration.value) * 60,
+            startTime: Date.now(),
+            numLocations,
+          };
+
+          const scoresToUse = room.scores || {};
+          Object.keys(room.players).forEach((pid) => {
+            if (scoresToUse[pid] === undefined) scoresToUse[pid] = 0;
+          });
+
+          roomsRef.child(currentRoomId).update({
+            gameState,
+            votes: {},
+            votesRevealed: false,
+            spyGuess: null,
+            roundScores: null,
+            scores: room.scoringEnabled ? scoresToUse : null,
+          }).then(() => startGame());
+        });
+      });
 
       // Show lobby
       function showLobby() {
@@ -1497,13 +1996,26 @@
               numLocations: numLocations,
             };
 
-            // Update Firebase - this will trigger watchRoom on all clients
+            const scoringEnabled = scoringEnabledInput.checked;
+            let scoresToUse = room.scores || {};
+            if (scoringEnabled) {
+              Object.keys(room.players).forEach((pid) => {
+                if (scoresToUse[pid] === undefined) scoresToUse[pid] = 0;
+              });
+            }
+            const updateData = {
+              gameStarted: true,
+              gameState: gameState,
+              votes: {},
+              votesRevealed: false,
+              spyGuess: null,
+              roundScores: null,
+              scoringEnabled: scoringEnabled,
+            };
+            if (scoringEnabled) updateData.scores = scoresToUse;
             roomsRef
               .child(currentRoomId)
-              .update({
-                gameStarted: true,
-                gameState: gameState,
-              })
+              .update(updateData)
               .then(() => {
                 // Only start game after Firebase confirms the update
                 // This ensures all clients get the same state
@@ -1617,6 +2129,8 @@
             gameStarted: false,
             gameState: null,
             timerRunning: false,
+            votes: null,
+            votesRevealed: false,
           });
           endGame();
         }
