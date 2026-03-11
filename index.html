@@ -467,6 +467,57 @@
       body.local-mode .local-only {
         display: block;
       }
+
+      /* Player selection modal */
+      .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+      }
+
+      .modal-overlay.hidden {
+        display: none;
+      }
+
+      .modal-content {
+        background: white;
+        padding: 24px;
+        border-radius: 12px;
+        max-width: 400px;
+        width: 90%;
+        max-height: 80vh;
+        overflow-y: auto;
+      }
+
+      .modal-content h3 {
+        margin-bottom: 16px;
+        color: #2c3e50;
+      }
+
+      .player-select-item {
+        padding: 12px 16px;
+        background: #ecf0f1;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+
+      .player-select-item:hover {
+        background: #d5dbdb;
+      }
+
+      .player-select-item .player-status {
+        font-size: 12px;
+        color: #7f8c8d;
+      }
     </style>
   </head>
   <body>
@@ -587,6 +638,16 @@
       </div>
     </div>
 
+    <!-- Player selection modal (join in-progress game) -->
+    <div id="playerSelectModal" class="modal-overlay hidden">
+      <div class="modal-content">
+        <h3>Select which player you are</h3>
+        <p style="margin-bottom: 16px; color: #7f8c8d;">Rejoin this game by selecting your name from the list.</p>
+        <div id="playerSelectList"></div>
+        <button id="playerSelectCancelBtn" class="secondary" style="margin-top: 16px;">Cancel</button>
+      </div>
+    </div>
+
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
@@ -653,29 +714,48 @@
       const rejoinRoomInfo = document.getElementById("rejoinRoomInfo");
       const rejoinBtn = document.getElementById("rejoinBtn");
 
-      const COOKIE_KEY = "spygame_player";
+      const STORAGE_KEY = "spygame_player";
       const COOKIE_DAYS = 7;
 
-      // Cookie helpers for reconnection
+      // Cookie + localStorage for reconnection (localStorage works with file:// and more browsers)
       function setPlayerCookie(roomId, peerId, name) {
-        const data = JSON.stringify({ roomId, peerId, name, ts: Date.now() });
-        const expires = new Date();
-        expires.setDate(expires.getDate() + COOKIE_DAYS);
-        document.cookie = `${COOKIE_KEY}=${encodeURIComponent(data)};path=/;expires=${expires.toUTCString()};SameSite=Lax`;
+        const data = { roomId, peerId, name, ts: Date.now() };
+        const str = JSON.stringify(data);
+        try {
+          const expires = new Date();
+          expires.setDate(expires.getDate() + COOKIE_DAYS);
+          document.cookie = `${STORAGE_KEY}=${encodeURIComponent(str)};path=/;expires=${expires.toUTCString()};SameSite=Lax`;
+        } catch (e) {}
+        try {
+          localStorage.setItem(STORAGE_KEY, str);
+        } catch (e) {}
       }
 
       function getPlayerCookie() {
-        const match = document.cookie.match(new RegExp("(?:^|; )" + COOKIE_KEY.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "=([^;]*)"));
-        if (!match) return null;
         try {
-          const data = JSON.parse(decodeURIComponent(match[1]));
-          if (data && data.roomId && data.peerId) return data;
+          const stored = localStorage.getItem(STORAGE_KEY);
+          if (stored) {
+            const data = JSON.parse(stored);
+            if (data && data.roomId && data.peerId) return data;
+          }
+        } catch (e) {}
+        try {
+          const match = document.cookie.match(new RegExp("(?:^|; )" + STORAGE_KEY.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "=([^;]*)"));
+          if (match) {
+            const data = JSON.parse(decodeURIComponent(match[1]));
+            if (data && data.roomId && data.peerId) return data;
+          }
         } catch (e) {}
         return null;
       }
 
       function clearPlayerCookie() {
-        document.cookie = `${COOKIE_KEY}=;path=/;expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+        try {
+          document.cookie = `${STORAGE_KEY}=;path=/;expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+        } catch (e) {}
+        try {
+          localStorage.removeItem(STORAGE_KEY);
+        } catch (e) {}
       }
 
       // Game mode toggle
@@ -837,8 +917,77 @@
 
       // Initialize app
       function initApp() {
+        const cookie = getPlayerCookie();
+        if (cookie) {
+          attemptAutoReconnect(cookie);
+          return;
+        }
         myPeerId =
           "user_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+        createRoomBtn.disabled = !usernameInput.value.trim();
+        setGameMode("local");
+        loadRooms();
+      }
+
+      function attemptAutoReconnect(cookie) {
+        document.body.classList.remove("local-mode");
+        homeScreen.classList.remove("hidden");
+        lobbyScreen.classList.add("hidden");
+        gameScreen.classList.add("hidden");
+        localGameScreen.classList.add("hidden");
+        localModeBtn.classList.remove("active");
+        onlineModeBtn.classList.add("active");
+        roomList.innerHTML =
+          '<div class="status-message info">Reconnecting to your game...</div>' +
+          '<button id="cancelReconnectBtn" class="secondary" style="margin-top: 8px;">Cancel</button>';
+        document.getElementById("cancelReconnectBtn").onclick = () => {
+          clearPlayerCookie();
+          finishInitWithoutReconnect();
+        };
+
+        roomsRef.child(cookie.roomId).once("value").then((snapshot) => {
+          const room = snapshot.val();
+          if (!room) {
+            clearPlayerCookie();
+            finishInitWithoutReconnect();
+            return;
+          }
+          const playerStillInRoom = room.players && room.players[cookie.peerId];
+          if (!playerStillInRoom) {
+            clearPlayerCookie();
+            finishInitWithoutReconnect();
+            return;
+          }
+          myPeerId = cookie.peerId;
+          myUsername = cookie.name;
+          currentRoomId = cookie.roomId;
+          usernameInput.value = cookie.name;
+          isHost = room.hostPeerId === myPeerId;
+
+          roomsRef.child(cookie.roomId).child("players").child(myPeerId).update({
+            name: cookie.name,
+            connected: true,
+          });
+          const playerPresenceRef = roomsRef.child(cookie.roomId).child("players").child(myPeerId).child("connected");
+          playerPresenceRef.onDisconnect().set(false);
+
+          setGameMode("online");
+          rejoinSection.classList.add("hidden");
+          if (room.gameStarted) {
+            gameState = room.gameState;
+            startGame();
+          } else {
+            showLobby();
+          }
+          watchRoom();
+        }).catch(() => {
+          clearPlayerCookie();
+          finishInitWithoutReconnect();
+        });
+      }
+
+      function finishInitWithoutReconnect() {
+        myPeerId = "user_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
         createRoomBtn.disabled = !usernameInput.value.trim();
         setGameMode("local");
         loadRooms();
@@ -876,6 +1025,7 @@
               name: username,
               peerId: myPeerId,
               isHost: true,
+              connected: true,
             },
           },
           gameStarted: false,
@@ -907,59 +1057,121 @@
       // Load rooms
       let roomsListenerAttached = false;
 
+      function showRoomListError(msg) {
+        roomList.innerHTML =
+          '<div class="status-message warning">' + msg + '</div>' +
+          '<button id="retryRoomsBtn" class="secondary" style="margin-top: 10px;">Retry</button>';
+        const retryBtn = document.getElementById("retryRoomsBtn");
+        if (retryBtn) retryBtn.onclick = () => { roomList.innerHTML = '<div class="status-message info">Loading rooms...</div>'; loadRooms(); };
+      }
+
       function loadRooms() {
         if (roomsListenerAttached) {
           roomsRef.off("value");
+          roomsListenerAttached = false;
         }
-        roomsRef.on("value", (snapshot) => {
+        roomList.innerHTML = '<div class="status-message info">Loading rooms...</div>';
+
+        const loadTimeout = setTimeout(() => {
+          if (roomList.innerHTML.includes("Loading rooms")) {
+            showRoomListError("Connection timeout. Check Firebase rules (see FIREBASE_SETUP.md) or your network.");
+          }
+        }, 8000);
+
+        const successCallback = (snapshot) => {
+          clearTimeout(loadTimeout);
           roomsListenerAttached = true;
           const rooms = snapshot && snapshot.val ? snapshot.val() : null;
 
           if (!rooms || typeof rooms !== "object") {
             roomList.innerHTML =
-              '<div class="status-message info">No rooms available. Create one!</div>';
+              '<div class="status-message info">No rooms available. Create one!</div>' +
+              '<button id="refreshRoomsBtn" class="secondary" style="margin-top: 8px;">Refresh</button>';
+            const refreshBtn = document.getElementById("refreshRoomsBtn");
+            if (refreshBtn) refreshBtn.onclick = () => loadRooms();
             return;
           }
 
           let roomsHtml = "";
+          let inProgressHtml = "";
+
           Object.entries(rooms).forEach(([roomId, room]) => {
             if (!room || typeof room !== "object") return;
+            const playerCount = room.players && typeof room.players === "object"
+              ? Object.keys(room.players).length
+              : 0;
+            const roomName = (room.name || "Unnamed Room").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            const safeRoomId = String(roomId).replace(/"/g, "&quot;");
+
             if (!room.gameStarted) {
-              const playerCount = room.players && typeof room.players === "object"
-                ? Object.keys(room.players).length
-                : 0;
-              const roomName = (room.name || "Unnamed Room").replace(/</g, "&lt;").replace(/>/g, "&gt;");
               roomsHtml += `
-                <div class="room-item" data-room-id="${roomId.replace(/"/g, "&quot;")}">
+                <div class="room-item" data-room-id="${safeRoomId}">
                   <div class="room-info">
                     <h3>${roomName}</h3>
                     <p>${playerCount} player(s)</p>
                   </div>
                   <div style="display: flex; gap: 10px;">
-                    <button class="room-join-btn" data-room-id="${roomId.replace(/"/g, "&quot;")}">Join</button>
-                    <button class="room-delete-btn danger" data-room-id="${roomId.replace(/"/g, "&quot;")}" style="width: auto; padding: 10px 16px;">Delete</button>
+                    <button class="room-join-btn" data-room-id="${safeRoomId}">Join</button>
+                    <button class="room-delete-btn danger" data-room-id="${safeRoomId}" style="width: auto; padding: 10px 16px;">Delete</button>
+                  </div>
+                </div>
+              `;
+            } else {
+              inProgressHtml += `
+                <div class="room-item" data-room-id="${safeRoomId}">
+                  <div class="room-info">
+                    <h3>${roomName}</h3>
+                    <p>${playerCount} player(s) · Game in progress</p>
+                  </div>
+                  <div style="display: flex; gap: 10px;">
+                    <button class="room-join-as-player-btn" data-room-id="${safeRoomId}">Join as Player</button>
                   </div>
                 </div>
               `;
             }
           });
 
-          roomList.innerHTML =
-            roomsHtml ||
-            '<div class="status-message info">No rooms available. Create one!</div>';
+          let fullHtml = "";
+          if (roomsHtml) {
+            fullHtml += "<h3 style=\"margin-bottom: 10px; font-size: 16px;\">Lobbies</h3>" + roomsHtml;
+          }
+          if (inProgressHtml) {
+            fullHtml += "<h3 style=\"margin: 20px 0 10px; font-size: 16px;\">In-Progress Games</h3>" + inProgressHtml;
+          }
 
-          // Attach click handlers via event delegation
+          const emptyMsg = '<div class="status-message info">No rooms available. Create one!</div>' +
+            '<button id="refreshRoomsBtn" class="secondary" style="margin-top: 8px;">Refresh</button>';
+          roomList.innerHTML = fullHtml || emptyMsg;
+          const refreshBtn = document.getElementById("refreshRoomsBtn");
+          if (refreshBtn) refreshBtn.onclick = () => loadRooms();
+
           roomList.querySelectorAll(".room-join-btn").forEach((btn) => {
-            btn.onclick = () => joinRoom(btn.dataset.roomId);
+            btn.onclick = () => joinRoom(btn.getAttribute("data-room-id"));
+          });
+          roomList.querySelectorAll(".room-join-as-player-btn").forEach((btn) => {
+            btn.onclick = () => showPlayerSelectModal(btn.getAttribute("data-room-id"));
           });
           roomList.querySelectorAll(".room-delete-btn").forEach((btn) => {
             btn.onclick = () => {
               if (confirm("Are you sure you want to delete this room?")) {
-                deleteRoom(btn.dataset.roomId);
+                deleteRoom(btn.getAttribute("data-room-id"));
               }
             };
           });
-        });
+        };
+
+        const cancelCallback = (err) => {
+          clearTimeout(loadTimeout);
+          roomsListenerAttached = false;
+          const msg = err && err.message ? err.message : "Unknown error";
+          if (msg.includes("permission") || msg.includes("Permission")) {
+            showRoomListError("Database access denied. Deploy Firebase rules (see FIREBASE_SETUP.md).");
+          } else {
+            showRoomListError("Could not load rooms: " + msg);
+          }
+        };
+
+        roomsRef.on("value", successCallback, cancelCallback);
       }
 
       // Delete room (caller handles confirm)
@@ -999,6 +1211,10 @@
 
       // Join room
       window.joinRoom = function (roomId) {
+        if (!roomId) {
+          alert("Invalid room");
+          return;
+        }
         const username = usernameInput.value.trim();
         if (!username) {
           alert("Please enter your name");
@@ -1016,11 +1232,10 @@
             const room = snapshot.val();
             if (!room) {
               alert("Room no longer exists");
-              return;
+              throw new Error("Room not found");
             }
 
-            // Add player to room
-            roomsRef
+            return roomsRef
               .child(roomId)
               .child("players")
               .child(myPeerId)
@@ -1029,22 +1244,101 @@
                 peerId: myPeerId,
                 isHost: false,
                 connected: true,
-              })
-              .then(() => {
-                // Set presence tracking
-                const playerPresenceRef = roomsRef
-                  .child(roomId)
-                  .child("players")
-                  .child(myPeerId)
-                  .child("connected");
-                playerPresenceRef.onDisconnect().set(false);
-
-                setPlayerCookie(roomId, myPeerId, myUsername);
-                showLobby();
-                watchRoom();
               });
+          })
+          .then(() => {
+            if (!currentRoomId) return;
+            const playerPresenceRef = roomsRef
+              .child(currentRoomId)
+              .child("players")
+              .child(myPeerId)
+              .child("connected");
+            playerPresenceRef.onDisconnect().set(false);
+
+            setPlayerCookie(currentRoomId, myPeerId, myUsername);
+            showLobby();
+            watchRoom();
+          })
+          .catch((error) => {
+            console.error("Join room error:", error);
+            if (error && error.message !== "Room not found") {
+              alert("Failed to join room. Check Firebase rules (see FIREBASE_SETUP.md).");
+            }
           });
       };
+
+      // Join in-progress game as existing player
+      let pendingJoinRoomId = null;
+
+      function showPlayerSelectModal(roomId) {
+        pendingJoinRoomId = roomId;
+        roomsRef.child(roomId).once("value").then((snapshot) => {
+          const room = snapshot.val();
+          if (!room || !room.gameStarted) {
+            alert("Room no longer exists or game has not started");
+            pendingJoinRoomId = null;
+            return;
+          }
+          const players = room.players || {};
+          const playerSelectList = document.getElementById("playerSelectList");
+          playerSelectList.innerHTML = "";
+          Object.entries(players).forEach(([key, player]) => {
+            const peerId = player.peerId || key;
+            const div = document.createElement("div");
+            div.className = "player-select-item";
+            div.dataset.peerId = peerId;
+            div.dataset.name = (player.name || "Unknown").replace(/"/g, "&quot;");
+            div.innerHTML = `
+              <strong>${(player.name || "Unknown").replace(/</g, "&lt;")}</strong>
+              <span class="player-status">${player.connected ? " (connected)" : " (disconnected)"}</span>
+            `;
+            div.onclick = () => selectPlayerToRejoin(peerId, player.name);
+            playerSelectList.appendChild(div);
+          });
+          document.getElementById("playerSelectModal").classList.remove("hidden");
+        });
+      }
+
+      function selectPlayerToRejoin(peerId, name) {
+        const roomId = pendingJoinRoomId;
+        if (!roomId) return;
+
+        myPeerId = peerId;
+        myUsername = name || "Player";
+        currentRoomId = roomId;
+        usernameInput.value = myUsername;
+        pendingJoinRoomId = null;
+        document.getElementById("playerSelectModal").classList.add("hidden");
+
+        roomsRef.child(roomId).once("value").then((snapshot) => {
+          const room = snapshot.val();
+          if (!room || !room.players[peerId]) {
+            alert("Player no longer in this game");
+            return;
+          }
+          isHost = room.hostPeerId === peerId;
+
+          roomsRef.child(roomId).child("players").child(peerId).update({
+            name: myUsername,
+            connected: true,
+          });
+          const playerPresenceRef = roomsRef.child(roomId).child("players").child(peerId).child("connected");
+          playerPresenceRef.onDisconnect().set(false);
+
+          setPlayerCookie(roomId, peerId, myUsername);
+          gameState = room.gameState;
+          startGame();
+          watchRoom();
+        }).catch((err) => {
+          console.error("Join as player error:", err);
+          alert("Failed to join. Please try again.");
+        });
+      }
+
+      document.getElementById("playerSelectCancelBtn").addEventListener("click", () => {
+        pendingJoinRoomId = null;
+        document.getElementById("playerSelectModal").classList.add("hidden");
+      });
 
       // Watch room for updates
       function watchRoom() {
@@ -1136,24 +1430,24 @@
 
       function leaveRoom() {
         if (currentRoomId) {
-          // Mark player as disconnected
+          roomsRef.child(currentRoomId).off();
           roomsRef
             .child(currentRoomId)
             .child("players")
             .child(myPeerId)
             .child("connected")
             .set(false);
-
-          roomsRef.child(currentRoomId).off();
         }
 
         currentRoomId = null;
         isHost = false;
         gameState = null;
+        clearPlayerCookie();
 
         homeScreen.classList.remove("hidden");
         lobbyScreen.classList.add("hidden");
         gameScreen.classList.add("hidden");
+        localGameScreen.classList.add("hidden");
         if (gameMode === "online") checkRejoinAvailable();
       }
 
@@ -1224,15 +1518,17 @@
         lobbyScreen.classList.add("hidden");
         gameScreen.classList.remove("hidden");
 
-        // Show role
-        const assignment = gameState.assignments[myPeerId];
-        if (assignment.isSpy) {
+        const roleAssignment = gameState.assignments && gameState.assignments[myPeerId];
+        if (!roleAssignment) {
+          roleCard.className = "role-card";
+          roleCard.innerHTML = "<h2>Error</h2><p>Could not load your role. Please rejoin as the same player.</p>";
+        } else if (roleAssignment.isSpy) {
           roleCard.className = "role-card spy";
           roleCard.innerHTML =
             "<h2>🕵️ You are the SPY!</h2><p>Find out the location without revealing yourself!</p>";
         } else {
           roleCard.className = "role-card";
-          roleCard.innerHTML = `<h2>📍 Location: ${assignment.location}</h2><p>Role: ${assignment.role}</p>`;
+          roleCard.innerHTML = `<h2>📍 Location: ${roleAssignment.location}</h2><p>Role: ${roleAssignment.role}</p>`;
         }
 
         // Show all locations

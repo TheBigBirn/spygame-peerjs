@@ -1,5 +1,15 @@
 # Spyfall Game - Testing Guide
 
+## Automated Tests (Playwright)
+
+Run tests with:
+```bash
+npm install
+npm test
+```
+
+Tests cover: game mode toggle, local mode (tiles, reveal, selected), online mode (create, join, leave), cookie/reconnect, and auto-reconnect.
+
 ## Game Modes
 
 ### 1. Local (Pass & Play) Mode
